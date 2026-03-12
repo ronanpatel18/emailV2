@@ -1,6 +1,185 @@
 @import "tailwindcss";
 
 @theme {
+  --color-warm-50: #fafafa;
+  --color-warm-100: #f5f5f4;
+  --color-warm-200: #e7e5e4;
+  --color-warm-300: #d6d3d1;
+  --color-warm-400: #a8a29e;
+  --color-warm-500: #78716c;
+  --color-warm-600: #57534e;
+  --color-warm-700: #44403c;
+  --color-warm-800: #292524;
+  --color-warm-900: #1c1917;
+  --color-warm-950: #0c0a09;
+
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --color-stone-blue: #64748B;
+  
+  --radius-xl: 1rem;
+  --radius-2xl: 1.25rem;
+}
+
+@layer base {
+  body {
+    background-color: var(--color-warm-50);
+    color: var(--color-warm-900);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  
+  /* Ensure all interactive elements have correct pointers */
+  button, 
+  [role="button"],
+  input[type="submit"],
+  input[type="button"],
+  input[type="reset"] {
+    cursor: pointer;
+  }
+  
+  button:disabled,
+  [role="button"]:disabled,
+  input:disabled {
+    cursor: not-allowed;
+  }
+}
+
+/* Custom Scrollbar for better polish */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-warm-200);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-warm-300);
+}
+
+/* Shared Transitions */
+.transition-all-smooth {
+  transition-property: all;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 200ms;
+}
+
+/* Card styles */
+.card-polished {
+  background-color: white;
+  border: 1px solid var(--color-warm-200);
+  border-radius: 0.75rem;
+  box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.05), 0 1px 2px -1px rgb(0 0 0 / 0.03);
+}
+
+/* Focus rings */
+.focus-ring-polished {
+  outline: none;
+  --tw-ring-offset-width: 2px;
+  --tw-ring-offset-color: var(--color-warm-50);
+  --tw-ring-color: var(--color-warm-800);
+  --tw-ring-offset-shadow: var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);
+  --tw-ring-shadow: var(--tw-ring-inset) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color);
+  box-shadow: var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow, 0 0 #0000);
+}
+.focus-within-ring-polished:focus-within {
+  outline: none;
+  --tw-ring-offset-width: 2px;
+  --tw-ring-offset-color: var(--color-warm-50);
+  --tw-ring-color: var(--color-warm-800);
+  --tw-ring-offset-shadow: var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);
+  --tw-ring-shadow: var(--tw-ring-inset) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color);
+  box-shadow: var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow, 0 0 #0000);
+}
+
+/* Form Inputs */
+.input-polished {
+  width: 100%;
+  border-radius: 0.5rem;
+  border: 1px solid var(--color-warm-200);
+  background-color: white;
+  padding: 0.625rem 0.875rem;
+  font-size: 0.875rem;
+  color: var(--color-warm-900);
+  transition-property: border-color, box-shadow;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 200ms;
+}
+.input-polished:focus {
+  outline: none;
+  border-color: var(--color-warm-800);
+  box-shadow: 0 0 0 1px var(--color-warm-800);
+}
+.input-polished::placeholder {
+  color: var(--color-warm-400);
+}
+
+/* Buttons */
+.btn-primary-polished {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.5rem;
+  background-color: var(--color-warm-900);
+  color: white;
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  cursor: pointer;
+}
+.btn-primary-polished:hover:not(:disabled) {
+  background-color: var(--color-warm-700);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+}
+.btn-primary-polished:active:not(:disabled) {
+  transform: translateY(0);
+}
+.btn-primary-polished:focus-visible {
+  outline: none;
+  --tw-ring-offset-width: 2px;
+  --tw-ring-offset-color: var(--color-warm-50);
+  --tw-ring-color: var(--color-warm-900);
+  --tw-ring-offset-shadow: var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);
+  --tw-ring-shadow: var(--tw-ring-inset) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color);
+  box-shadow: var(--tw-ring-offset-shadow), var(--tw-ring-shadow), 0 0 transparent;
+}
+.btn-primary-polished:disabled {
+  cursor: not-allowed;
+}
+
+.btn-secondary-polished {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.5rem;
+  background-color: white;
+  color: var(--color-warm-800);
+  border: 1px solid var(--color-warm-200);
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  cursor: pointer;
+}
+.btn-secondary-polished:hover:not(:disabled) {
+  background-color: var(--color-warm-50);
+  border-color: var(--color-warm-300);
+}
+.btn-secondary-polished:focus-visible {
+  outline: none;
+  --tw-ring-offset-width: 2px;
+  --tw-ring-offset-color: white;
+  --tw-ring-color: var(--color-warm-800);
+  --tw-ring-offset-shadow: var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);
+  --tw-ring-shadow: var(--tw-ring-inset) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color);
+  box-shadow: var(--tw-ring-offset-shadow), var(--tw-ring-shadow), 0 0 transparent;
+}
+.btn-secondary-polished:disabled {
+  cursor: not-allowed;
 }

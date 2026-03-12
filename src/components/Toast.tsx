@@ -25,7 +25,7 @@ export function Toast({ message, type, onClose }: ToastProps) {
         visible ? "opacity-100" : "opacity-0"
       } ${
         type === "success"
-          ? "bg-white border-[#E5E5E5] text-[#171717]"
+          ? "bg-white border-[var(--color-warm-200)] text-[var(--color-warm-900)]"
           : "bg-white border-red-300 text-red-700"
       }`}
     >

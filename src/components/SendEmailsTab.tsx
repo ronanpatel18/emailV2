@@ -115,13 +115,13 @@ export function SendEmailsTab() {
 
       {/* Template Selection */}
       <div className="mb-6">
-        <label className="block text-sm font-medium text-gray-700 mb-1">
+        <label className="block text-sm font-medium text-[var(--color-warm-700)] mb-1">
           Select Template
         </label>
         <select
           value={selectedTemplate}
           onChange={(e) => setSelectedTemplate(e.target.value)}
-          className="w-full max-w-md border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-1 focus:ring-gray-400 focus:outline-none bg-white"
+          className="input-polished max-w-md bg-white"
         >
           <option value="">Choose a template...</option>
           {templates.map((t) => (
@@ -133,9 +133,9 @@ export function SendEmailsTab() {
       </div>
 
       {/* Contacts Selection */}
-      <div className="border border-[#E5E5E5] rounded-lg overflow-hidden shadow-sm mb-6">
-        <div className="bg-[#F5F5F5] px-4 py-3 border-b border-[#E5E5E5] flex items-center justify-between">
-          <label className="flex items-center gap-2 text-sm font-medium text-[#525252] cursor-pointer">
+      <div className="card-polished overflow-hidden mb-6">
+        <div className="bg-[var(--color-warm-50)] px-4 py-3 border-b border-[var(--color-warm-200)] flex items-center justify-between">
+          <label className="flex items-center gap-2 text-sm font-medium text-[var(--color-warm-600)] cursor-pointer">
             <input
               type="checkbox"
               checked={
@@ -150,15 +150,15 @@ export function SendEmailsTab() {
         </div>
         <div className="max-h-80 overflow-y-auto">
           {contacts.length === 0 ? (
-            <div className="text-center py-8 text-[#A3A3A3] text-sm">
+            <div className="text-center py-8 text-[var(--color-warm-400)] text-sm">
               No contacts available. Add contacts in the Contacts tab.
             </div>
           ) : (
             contacts.map((contact, idx) => (
               <label
                 key={contact.id}
-                className={`flex items-center gap-3 px-4 py-3 border-b border-[#E5E5E5] cursor-pointer hover:bg-[#FAFAFA] ${
-                  idx % 2 === 1 ? "bg-[#FAFAFA]" : "bg-white"
+                className={`flex items-center gap-3 px-4 py-3 border-b border-[var(--color-warm-200)] cursor-pointer hover:bg-[var(--color-warm-50)] ${
+                  idx % 2 === 1 ? "bg-[var(--color-warm-50)]" : "bg-white"
                 }`}
               >
                 <input
@@ -169,11 +169,11 @@ export function SendEmailsTab() {
                 />
                 <div className="flex-1 min-w-0">
                   <span className="text-sm font-medium">{contact.name}</span>
-                  <span className="text-sm text-[#525252] ml-2">
+                  <span className="text-sm text-[var(--color-warm-600)] ml-2">
                     {contact.email}
                   </span>
                   {contact.company && (
-                    <span className="text-xs text-[#A3A3A3] ml-2">
+                    <span className="text-xs text-[var(--color-warm-400)] ml-2">
                       ({contact.company})
                     </span>
                   )}
@@ -188,7 +188,7 @@ export function SendEmailsTab() {
       <button
         onClick={handleSend}
         disabled={sending || !selectedTemplate || selectedContacts.size === 0}
-        className="bg-black text-white rounded-md px-6 py-2.5 font-medium text-sm hover:bg-[#171717] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        className="btn-primary-polished px-6 py-2.5 disabled:opacity-50 disabled:cursor-not-allowed"
       >
         {sending ? (
           <span className="flex items-center gap-2">

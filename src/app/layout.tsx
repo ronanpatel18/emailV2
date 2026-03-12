@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Email Manager",
-  description: "WSBC Email Manager",
+  title: "Email Manager - WSBC",
+  description: "A secure and elegant way to manage contacts and email templates.",
 };
 
 export default function RootLayout({
@@ -19,7 +19,7 @@ export default function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body className="font-sans bg-white text-[#171717] antialiased">
+      <body className="font-sans text-[var(--color-warm-900)] bg-[var(--color-warm-50)] antialiased min-h-screen flex flex-col">
         {children}
       </body>
     </html>

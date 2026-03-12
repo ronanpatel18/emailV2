@@ -162,11 +162,11 @@ export function ContactsTab() {
       {ToastComponent}
 
       {/* Google Sheet Sync */}
-      <div className="border border-[#E5E5E5] rounded-lg p-4 mb-6 bg-[#FAFAFA] shadow-sm">
+      <div className="card-polished bg-[var(--color-warm-50)] p-4 mb-6">
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="text-sm font-semibold text-[#171717]">Shared Google Sheet</h3>
-            <p className="text-xs text-[#525252] mt-0.5">
+            <h3 className="text-sm font-semibold text-[var(--color-warm-900)]">Shared Google Sheet</h3>
+            <p className="text-xs text-[var(--color-warm-600)] mt-0.5">
               Edit contacts directly in Google Sheets. Changes sync automatically, or press Sync Now.
             </p>
           </div>
@@ -176,7 +176,7 @@ export function ContactsTab() {
                 href={sheetUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="border border-black text-black rounded-md px-3 py-1.5 font-medium text-xs hover:bg-white transition-colors"
+                className="btn-secondary-polished text-xs px-3 py-1.5"
               >
                 Open Google Sheet
               </a>
@@ -184,7 +184,7 @@ export function ContactsTab() {
             <button
               onClick={handleSyncSheet}
               disabled={syncing}
-              className={`bg-black text-white rounded-md px-3 py-1.5 font-medium text-xs hover:bg-[#171717] transition-colors ${syncing ? "opacity-50 cursor-not-allowed" : ""}`}
+              className={`btn-primary-polished text-xs px-3 py-1.5 ${syncing ? "opacity-50 cursor-not-allowed" : ""}`}
             >
               {syncing ? "Syncing..." : "Sync Now"}
             </button>
@@ -200,7 +200,7 @@ export function ContactsTab() {
             resetForm();
             setShowForm(true);
           }}
-          className="bg-black text-white rounded-md px-4 py-2 font-medium text-sm hover:bg-[#171717] transition-colors"
+          className="btn-primary-polished"
         >
           Add Contact
         </button>
@@ -208,13 +208,13 @@ export function ContactsTab() {
 
       {/* Add/Edit Form */}
       {showForm && (
-        <div className="border border-[#E5E5E5] rounded-lg p-6 mb-6 bg-white shadow-sm">
+        <div className="card-polished p-6 mb-6">
           <h3 className="text-lg font-semibold mb-4">
             {editing ? "Edit Contact" : "Add Contact"}
           </h3>
           <form onSubmit={handleSubmit} className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-[var(--color-warm-700)] mb-1">
                 Name *
               </label>
               <input
@@ -222,11 +222,11 @@ export function ContactsTab() {
                 required
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
-                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-1 focus:ring-gray-400 focus:outline-none"
+                className="input-polished"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-[var(--color-warm-700)] mb-1">
                 Email *
               </label>
               <input
@@ -234,22 +234,22 @@ export function ContactsTab() {
                 required
                 value={form.email}
                 onChange={(e) => setForm({ ...form, email: e.target.value })}
-                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-1 focus:ring-gray-400 focus:outline-none"
+                className="input-polished"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-[var(--color-warm-700)] mb-1">
                 Company
               </label>
               <input
                 type="text"
                 value={form.company}
                 onChange={(e) => setForm({ ...form, company: e.target.value })}
-                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-1 focus:ring-gray-400 focus:outline-none"
+                className="input-polished"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-[var(--color-warm-700)] mb-1">
                 Phone
               </label>
               <input
@@ -259,32 +259,32 @@ export function ContactsTab() {
                   setForm({ ...form, phone_number: e.target.value })
                 }
                 placeholder="(555) 123-4567"
-                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-1 focus:ring-gray-400 focus:outline-none"
+                className="input-polished"
               />
             </div>
             <div className="col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-[var(--color-warm-700)] mb-1">
                 Address
               </label>
               <input
                 type="text"
                 value={form.address}
                 onChange={(e) => setForm({ ...form, address: e.target.value })}
-                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-1 focus:ring-gray-400 focus:outline-none"
+                className="input-polished"
               />
             </div>
             <div className="col-span-2 flex gap-2 justify-end">
               <button
                 type="button"
                 onClick={resetForm}
-                className="text-[#525252] text-sm font-medium px-4 py-2 hover:text-[#171717]"
+                className="text-[var(--color-warm-600)] text-sm font-medium px-4 py-2 hover:text-[var(--color-warm-900)]"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={saving}
-                className="bg-black text-white rounded-md px-4 py-2 font-medium text-sm hover:bg-[#171717] disabled:opacity-50"
+                className="btn-primary-polished disabled:opacity-50"
               >
                 {saving ? "Saving..." : editing ? "Update" : "Add"}
               </button>
@@ -294,29 +294,29 @@ export function ContactsTab() {
       )}
 
       {/* Contacts Table */}
-      <div className="border border-[#E5E5E5] rounded-lg overflow-hidden shadow-sm">
+      <div className="card-polished overflow-hidden">
         <table className="w-full text-sm">
           <thead>
-            <tr className="bg-[#F5F5F5] border-b border-[#E5E5E5]">
-              <th className="text-left px-4 py-3 font-medium text-[#525252]">
+            <tr className="bg-[var(--color-warm-100)] border-b border-[var(--color-warm-200)] text-[var(--color-warm-900)] text-sm">
+              <th className="text-left px-4 py-3 font-medium text-[var(--color-warm-600)]">
                 Name
               </th>
-              <th className="text-left px-4 py-3 font-medium text-[#525252]">
+              <th className="text-left px-4 py-3 font-medium text-[var(--color-warm-600)]">
                 Email
               </th>
-              <th className="text-left px-4 py-3 font-medium text-[#525252]">
+              <th className="text-left px-4 py-3 font-medium text-[var(--color-warm-600)]">
                 Company
               </th>
-              <th className="text-left px-4 py-3 font-medium text-[#525252]">
+              <th className="text-left px-4 py-3 font-medium text-[var(--color-warm-600)]">
                 Phone
               </th>
-              <th className="text-left px-4 py-3 font-medium text-[#525252]">
+              <th className="text-left px-4 py-3 font-medium text-[var(--color-warm-600)]">
                 Address
               </th>
-              <th className="text-left px-4 py-3 font-medium text-[#525252]">
+              <th className="text-left px-4 py-3 font-medium text-[var(--color-warm-600)]">
                 Last Sent
               </th>
-              <th className="text-right px-4 py-3 font-medium text-[#525252]">
+              <th className="text-right px-4 py-3 font-medium text-[var(--color-warm-600)]">
                 Actions
               </th>
             </tr>
@@ -326,7 +326,7 @@ export function ContactsTab() {
               <tr>
                 <td
                   colSpan={7}
-                  className="text-center py-8 text-[#A3A3A3] text-sm"
+                  className="text-center py-8 text-[var(--color-warm-400)] text-sm"
                 >
                   No contacts yet. Add your first contact above.
                 </td>
@@ -335,22 +335,22 @@ export function ContactsTab() {
               contacts.map((contact, idx) => (
                 <tr
                   key={contact.id}
-                  className={`border-b border-[#E5E5E5] ${
-                    idx % 2 === 1 ? "bg-[#FAFAFA]" : "bg-white"
+                  className={`border-b border-[var(--color-warm-200)] ${
+                    idx % 2 === 1 ? "bg-[var(--color-warm-50)]" : "bg-white"
                   }`}
                 >
                   <td className="px-4 py-3 font-medium">{contact.name}</td>
-                  <td className="px-4 py-3 text-[#525252]">{contact.email}</td>
-                  <td className="px-4 py-3 text-[#525252]">
+                  <td className="px-4 py-3 text-[var(--color-warm-600)]">{contact.email}</td>
+                  <td className="px-4 py-3 text-[var(--color-warm-600)]">
                     {contact.company || "—"}
                   </td>
-                  <td className="px-4 py-3 text-[#525252]">
+                  <td className="px-4 py-3 text-[var(--color-warm-600)]">
                     {contact.phone_number || "—"}
                   </td>
-                  <td className="px-4 py-3 text-[#525252]">
+                  <td className="px-4 py-3 text-[var(--color-warm-600)]">
                     {contact.address || "—"}
                   </td>
-                  <td className="px-4 py-3 text-[#525252]">
+                  <td className="px-4 py-3 text-[var(--color-warm-600)]">
                     {contact.last_sent_at
                       ? new Date(contact.last_sent_at).toLocaleDateString()
                       : "—"}
@@ -358,13 +358,13 @@ export function ContactsTab() {
                   <td className="px-4 py-3 text-right">
                     <button
                       onClick={() => handleEdit(contact)}
-                      className="text-[#64748B] hover:text-[#171717] text-sm font-medium mr-3"
+                      className="text-[var(--color-warm-500)] hover:text-[var(--color-warm-900)] text-sm font-medium mr-3"
                     >
                       Edit
                     </button>
                     <button
                       onClick={() => handleDelete(contact.id)}
-                      className="text-[#A3A3A3] hover:text-red-600 text-sm font-medium"
+                      className="text-[var(--color-warm-400)] hover:text-red-600 text-sm font-medium"
                     >
                       Delete
                     </button>

@@ -162,8 +162,8 @@ export function TemplatesTab() {
       {ToastComponent}
 
       {/* Variable Reference */}
-      <div className="border border-[#E5E5E5] rounded-lg p-4 mb-6 bg-[#FAFAFA]">
-        <p className="text-sm font-medium text-[#525252] mb-2">
+      <div className="border border-[var(--color-warm-200)] rounded-lg p-4 mb-6 bg-[var(--color-warm-50)]">
+        <p className="text-sm font-medium text-[var(--color-warm-600)] mb-2">
           Available Template Variables
         </p>
         <div className="flex flex-wrap gap-2">
@@ -176,7 +176,7 @@ export function TemplatesTab() {
           ].map((v) => (
             <code
               key={v}
-              className="bg-white border border-[#E5E5E5] rounded px-2 py-1 text-xs text-[#525252]"
+              className="bg-white border border-[var(--color-warm-200)] rounded px-2 py-1 text-xs text-[var(--color-warm-600)]"
             >
               {v}
             </code>
@@ -188,7 +188,7 @@ export function TemplatesTab() {
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-2xl font-semibold">Templates</h2>
         <div className="flex gap-2">
-          <label className={`border border-black text-black rounded-md px-4 py-2 font-medium text-sm hover:bg-[#F5F5F5] transition-colors cursor-pointer ${uploading ? "opacity-50 pointer-events-none" : ""}`}>
+          <label className={`btn-secondary-polished cursor-pointer ${uploading ? "opacity-50 pointer-events-none" : ""}`}>
             {uploading ? "Uploading..." : "Upload DOCX"}
             <input
               type="file"
@@ -203,7 +203,7 @@ export function TemplatesTab() {
               resetForm();
               setShowForm(true);
             }}
-            className="bg-black text-white rounded-md px-4 py-2 font-medium text-sm hover:bg-[#171717] transition-colors"
+            className="btn-primary-polished"
           >
             New Template
           </button>
@@ -212,7 +212,7 @@ export function TemplatesTab() {
 
       {/* Form */}
       {showForm && (
-        <div className="border border-[#E5E5E5] rounded-lg p-6 mb-6 bg-white shadow-sm">
+        <div className="card-polished p-6 mb-6">
           <h3 className="text-lg font-semibold mb-4">
             {editing ? "Edit Template" : "New Template"}
           </h3>
@@ -245,7 +245,7 @@ export function TemplatesTab() {
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-[var(--color-warm-700)] mb-1">
                   Template Name *
                 </label>
                 <input
@@ -253,11 +253,11 @@ export function TemplatesTab() {
                   required
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-1 focus:ring-gray-400 focus:outline-none"
+                  className="input-polished"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-[var(--color-warm-700)] mb-1">
                   Subject Line *
                 </label>
                 <input
@@ -267,34 +267,34 @@ export function TemplatesTab() {
                   onChange={(e) =>
                     setForm({ ...form, subject: e.target.value })
                   }
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-1 focus:ring-gray-400 focus:outline-none"
+                  className="input-polished"
                 />
               </div>
             </div>
 
             {form.type === "plain" ? (
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-[var(--color-warm-700)] mb-1">
                   Body
                 </label>
                 <textarea
                   value={form.body}
                   onChange={(e) => setForm({ ...form, body: e.target.value })}
                   rows={8}
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-1 focus:ring-gray-400 focus:outline-none font-mono"
+                  className="input-polished font-mono"
                   placeholder="Hi {{name}},&#10;&#10;Thank you for your time..."
                 />
               </div>
             ) : (
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-[var(--color-warm-700)] mb-1">
                   Upload .docx File
                 </label>
                 <input
                   type="file"
                   accept=".docx"
                   onChange={(e) => setFile(e.target.files?.[0] || null)}
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm file:mr-4 file:py-1 file:px-3 file:rounded file:border-0 file:text-sm file:font-medium file:bg-[#F5F5F5] file:text-[#525252]"
+                  className="w-full border border-[var(--color-warm-200)] rounded-md px-3 py-2 text-sm file:mr-4 file:py-1 file:px-3 file:rounded file:border-0 file:text-sm file:font-medium file:bg-[var(--color-warm-50)] file:text-[var(--color-warm-600)]"
                 />
               </div>
             )}
@@ -303,14 +303,14 @@ export function TemplatesTab() {
               <button
                 type="button"
                 onClick={resetForm}
-                className="text-[#525252] text-sm font-medium px-4 py-2 hover:text-[#171717]"
+                className="text-[var(--color-warm-600)] text-sm font-medium px-4 py-2 hover:text-[var(--color-warm-900)]"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={saving}
-                className="bg-black text-white rounded-md px-4 py-2 font-medium text-sm hover:bg-[#171717] disabled:opacity-50"
+                className="btn-primary-polished disabled:opacity-50"
               >
                 {saving ? "Saving..." : editing ? "Update" : "Create"}
               </button>
@@ -322,28 +322,28 @@ export function TemplatesTab() {
       {/* Templates List */}
       <div className="space-y-3">
         {templates.length === 0 ? (
-          <div className="text-center py-8 text-[#A3A3A3] text-sm border border-[#E5E5E5] rounded-lg">
+          <div className="text-center py-8 text-[var(--color-warm-400)] text-sm border border-[var(--color-warm-200)] rounded-lg">
             No templates yet. Create your first template above.
           </div>
         ) : (
           templates.map((template) => (
             <div
               key={template.id}
-              className="border border-[#E5E5E5] rounded-lg p-4 bg-white shadow-sm"
+              className="card-polished p-4"
             >
               <div className="flex items-start justify-between">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
                     <h4 className="font-medium text-sm">{template.name}</h4>
-                    <span className="text-xs bg-[#F5F5F5] text-[#525252] px-2 py-0.5 rounded">
+                    <span className="text-xs bg-[var(--color-warm-50)] text-[var(--color-warm-600)] px-2 py-0.5 rounded">
                       {template.type === "docx" ? "DOCX" : "Plain Text"}
                     </span>
                   </div>
-                  <p className="text-sm text-[#525252]">
+                  <p className="text-sm text-[var(--color-warm-600)]">
                     Subject: {template.subject}
                   </p>
                   {template.type === "plain" && template.body && (
-                    <p className="text-xs text-[#A3A3A3] mt-1 truncate max-w-lg">
+                    <p className="text-xs text-[var(--color-warm-400)] mt-1 truncate max-w-lg">
                       {template.body}
                     </p>
                   )}
@@ -351,13 +351,13 @@ export function TemplatesTab() {
                 <div className="flex gap-2 ml-4">
                   <button
                     onClick={() => handleEdit(template)}
-                    className="text-[#64748B] hover:text-[#171717] text-sm font-medium"
+                    className="text-[var(--color-warm-500)] hover:text-[var(--color-warm-900)] text-sm font-medium"
                   >
                     Edit
                   </button>
                   <button
                     onClick={() => handleDelete(template.id)}
-                    className="text-[#A3A3A3] hover:text-red-600 text-sm font-medium"
+                    className="text-[var(--color-warm-400)] hover:text-red-600 text-sm font-medium"
                   >
                     Delete
                   </button>
