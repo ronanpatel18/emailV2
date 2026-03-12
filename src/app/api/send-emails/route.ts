@@ -1,0 +1,143 @@
+import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@/lib/auth";
+import { supabaseAdmin } from "@/lib/supabase";
+import { sendMail } from "@/lib/graph";
+import {
+  substituteVariables,
+  plainTextToHtml,
+} from "@/lib/template-utils";
+import mammoth from "mammoth";
+import type { Contact, Template } from "@/types";
+
+export async function POST(req: NextRequest) {
+  const session = await auth();
+  if (!session?.userId || !session?.accessToken) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const body = await req.json();
+  const { templateId, contactIds } = body as {
+    templateId: string;
+    contactIds: string[];
+  };
+
+  if (!templateId || !contactIds?.length) {
+    return NextResponse.json(
+      { error: "Template and at least one contact are required" },
+      { status: 400 }
+    );
+  }
+
+  // Fetch template
+  const { data: template, error: templateError } = await supabaseAdmin
+    .from("templates")
+    .select("*")
+    .eq("id", templateId)
+    .single();
+
+  if (templateError || !template) {
+    return NextResponse.json(
+      { error: "Template not found" },
+      { status: 404 }
+    );
+  }
+
+  // Fetch contacts
+  const { data: contacts, error: contactsError } = await supabaseAdmin
+    .from("contacts")
+    .select("*")
+    .in("id", contactIds);
+
+  if (contactsError || !contacts?.length) {
+    return NextResponse.json(
+      { error: "No contacts found" },
+      { status: 404 }
+    );
+  }
+
+  // Get HTML body from template
+  let templateHtml: string;
+  const typedTemplate = template as Template;
+
+  if (typedTemplate.type === "docx" && typedTemplate.docx_storage_path) {
+    // Download DOCX from Supabase Storage
+    const { data: fileData, error: downloadError } = await supabaseAdmin.storage
+      .from("templates")
+      .download(typedTemplate.docx_storage_path);
+
+    if (downloadError || !fileData) {
+      return NextResponse.json(
+        { error: "Failed to download DOCX template" },
+        { status: 500 }
+      );
+    }
+
+    const buffer = Buffer.from(await fileData.arrayBuffer());
+    const result = await mammoth.convertToHtml(
+      { buffer },
+      {
+        convertImage: mammoth.images.imgElement(async (image) => {
+          const imageBuffer = await image.read();
+          const base64 = imageBuffer.toString("base64");
+          const contentType = image.contentType || "image/png";
+          return { src: `data:${contentType};base64,${base64}` };
+        }),
+      }
+    );
+    templateHtml = result.value;
+  } else {
+    templateHtml = plainTextToHtml(typedTemplate.body || "");
+  }
+
+  // Send emails
+  let successCount = 0;
+  let failCount = 0;
+  const errors: string[] = [];
+
+  for (const contact of contacts as Contact[]) {
+    try {
+      const personalizedSubject = substituteVariables(
+        typedTemplate.subject,
+        contact,
+        false
+      );
+      const personalizedBody = substituteVariables(
+        templateHtml,
+        contact,
+        true
+      );
+
+      const result = await sendMail({
+        to: contact.email,
+        subject: personalizedSubject,
+        htmlBody: personalizedBody,
+        accessToken: session.accessToken,
+      });
+
+      // Record in email_tracking
+      await supabaseAdmin.from("email_tracking").insert({
+        contact_id: contact.id,
+        template_id: typedTemplate.id,
+        sent_by: session.userId,
+        subject: personalizedSubject,
+        message_id: result.messageId || null,
+        conversation_id: result.conversationId || null,
+      });
+
+      successCount++;
+    } catch (err) {
+      failCount++;
+      errors.push(
+        `Failed to send to ${contact.email}: ${
+          err instanceof Error ? err.message : "Unknown error"
+        }`
+      );
+    }
+  }
+
+  return NextResponse.json({
+    success: successCount,
+    failed: failCount,
+    errors: errors.length > 0 ? errors : undefined,
+  });
+}
