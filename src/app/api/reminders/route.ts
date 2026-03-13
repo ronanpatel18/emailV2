@@ -1,31 +1,15 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase";
-import { sendMail, checkForReplies, refreshAccessToken } from "@/lib/graph";
+import { sendMail, checkForReplies } from "@/lib/graph";
 
 export async function POST() {
   const session = await auth();
-  if (!session?.userId) {
+  if (!session?.userId || !session?.accessToken) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Use session token or refresh token
-  let accessToken = session.accessToken;
-  if (!accessToken && process.env.MS_GRAPH_REFRESH_TOKEN) {
-    const tokens = await refreshAccessToken(
-      process.env.MS_GRAPH_REFRESH_TOKEN
-    );
-    accessToken = tokens.access_token;
-  }
-  //tokens
-  if (!accessToken) {
-    return NextResponse.json(
-      { error: "No access token available" },
-      { status: 401 }
-    );
-  }
-
-  return processReminders(accessToken);
+  return processReminders(session.accessToken);
 }
 
 async function processReminders(accessToken: string) {

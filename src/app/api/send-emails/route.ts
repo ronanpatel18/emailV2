@@ -6,7 +6,7 @@ import {
   substituteVariables,
   plainTextToHtml,
 } from "@/lib/template-utils";
-import mammoth from "mammoth";
+import { convertDocxToStyledHtml } from "@/lib/docx-to-html";
 import type { Contact, Template } from "@/types";
 
 export async function POST(req: NextRequest) {
@@ -73,18 +73,7 @@ export async function POST(req: NextRequest) {
     }
 
     const buffer = Buffer.from(await fileData.arrayBuffer());
-    const result = await mammoth.convertToHtml(
-      { buffer },
-      {
-        convertImage: mammoth.images.imgElement(async (image) => {
-          const imageBuffer = await image.read();
-          const base64 = imageBuffer.toString("base64");
-          const contentType = image.contentType || "image/png";
-          return { src: `data:${contentType};base64,${base64}` };
-        }),
-      }
-    );
-    templateHtml = result.value;
+    templateHtml = await convertDocxToStyledHtml(buffer);
   } else {
     templateHtml = plainTextToHtml(typedTemplate.body || "");
   }

@@ -84,6 +84,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           if (userId) {
             token.userId = userId;
 
+            // Persist refresh token so cron jobs can send on behalf of this user
+            if (account.refresh_token) {
+              await supabaseAdmin
+                .from("users")
+                .update({ refresh_token: account.refresh_token })
+                .eq("id", userId);
+            }
+
             // Auto-add to the first access group if not already a member
             const { data: membership } = await supabaseAdmin
               .from("group_members")
@@ -143,6 +151,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             token.accessToken = tokens.access_token;
             token.refreshToken = tokens.refresh_token ?? token.refreshToken;
             token.accessTokenExpires = Date.now() + tokens.expires_in * 1000;
+
+            // Keep DB refresh token in sync when rotated
+            if (tokens.refresh_token && token.userId) {
+              await supabaseAdmin
+                .from("users")
+                .update({ refresh_token: tokens.refresh_token })
+                .eq("id", token.userId);
+            }
           }
         } catch (error) {
           console.error("Error refreshing access token:", error);

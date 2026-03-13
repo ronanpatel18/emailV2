@@ -11,30 +11,6 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Get access token via refresh token
-  const refreshToken = process.env.MS_GRAPH_REFRESH_TOKEN;
-  if (!refreshToken) {
-    return NextResponse.json(
-      { error: "No refresh token configured" },
-      { status: 500 }
-    );
-  }
-
-  let accessToken: string;
-  try {
-    const tokens = await refreshAccessToken(refreshToken);
-    accessToken = tokens.access_token;
-  } catch (err) {
-    return NextResponse.json(
-      {
-        error: `Token refresh failed: ${
-          err instanceof Error ? err.message : "Unknown"
-        }`,
-      },
-      { status: 500 }
-    );
-  }
-
   const sevenDaysAgo = new Date(
     Date.now() - 7 * 24 * 60 * 60 * 1000
   ).toISOString();
@@ -55,11 +31,61 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ message: "No reminders needed", processed: 0 });
   }
 
+  // Collect unique sender IDs so we can fetch their refresh tokens
+  const senderIds = [...new Set(pendingEmails.map((e) => e.sent_by).filter(Boolean))];
+  const { data: senders } = await supabaseAdmin
+    .from("users")
+    .select("id, refresh_token")
+    .in("id", senderIds.length > 0 ? senderIds : ["none"]);
+
+  // Build a map of sender ID → refresh token
+  const senderTokenMap = new Map<string, string>();
+  if (senders) {
+    for (const s of senders) {
+      if (s.refresh_token) {
+        senderTokenMap.set(s.id, s.refresh_token);
+      }
+    }
+  }
+
+  // Cache refreshed access tokens to avoid refreshing the same token multiple times
+  const accessTokenCache = new Map<string, string>();
+
   let remindersSent = 0;
   let repliesFound = 0;
+  let skipped = 0;
 
   for (const email of pendingEmails) {
-    if (!email.conversation_id) continue;
+    if (!email.conversation_id || !email.sent_by) continue;
+
+    // Get the original sender's refresh token
+    const refreshToken = senderTokenMap.get(email.sent_by);
+    if (!refreshToken) {
+      skipped++;
+      continue;
+    }
+
+    // Get or refresh access token for this sender
+    let accessToken = accessTokenCache.get(email.sent_by);
+    if (!accessToken) {
+      try {
+        const tokens = await refreshAccessToken(refreshToken);
+        accessToken = tokens.access_token;
+        accessTokenCache.set(email.sent_by, accessToken);
+
+        // Update stored refresh token if it was rotated
+        if (tokens.refresh_token && tokens.refresh_token !== refreshToken) {
+          await supabaseAdmin
+            .from("users")
+            .update({ refresh_token: tokens.refresh_token })
+            .eq("id", email.sent_by);
+        }
+      } catch (err) {
+        console.error(`Failed to refresh token for user ${email.sent_by}:`, err);
+        skipped++;
+        continue;
+      }
+    }
 
     try {
       const hasReply = await checkForReplies(
@@ -108,5 +134,6 @@ export async function GET(req: NextRequest) {
     processed: pendingEmails.length,
     remindersSent,
     repliesFound,
+    skipped,
   });
 }
