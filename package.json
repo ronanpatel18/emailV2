@@ -32,5 +32,17 @@
     "@types/react-dom": "^19.2.3",
     "eslint": "^9.39.4",
     "eslint-config-next": "^16.1.6"
+  },
+  "overrides": {
+    "rimraf": "^5.0.0",
+    "glob": "^11.0.0",
+    "node-domexception": "^1.0.0",
+    "inflight": "^1.0.6",
+    "fstream": "^1.0.12",
+    "exceljs": {
+      "archiver": "^7.0.1",
+      "fast-csv": "^5.0.0",
+      "unzipper": "^0.12.0"
+    }
   }
 }
