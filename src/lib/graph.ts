@@ -8,11 +8,18 @@ export function getGraphClient(accessToken: string): Client {
   });
 }
 
+interface EmailAttachment {
+  name: string;
+  contentType: string;
+  contentBytes: string; // base64 encoded
+}
+
 interface SendMailOptions {
   to: string;
   subject: string;
   htmlBody: string;
   accessToken: string;
+  attachments?: EmailAttachment[];
 }
 
 interface GraphSendResponse {
@@ -25,6 +32,7 @@ export async function sendMail({
   subject,
   htmlBody,
   accessToken,
+  attachments,
 }: SendMailOptions): Promise<GraphSendResponse> {
   const client = getGraphClient(accessToken);
 
@@ -41,6 +49,18 @@ export async function sendMail({
       },
     ],
   });
+
+  // Add attachments to the draft
+  if (attachments && attachments.length > 0) {
+    for (const att of attachments) {
+      await client.api(`/me/messages/${draft.id}/attachments`).post({
+        "@odata.type": "#microsoft.graph.fileAttachment",
+        name: att.name,
+        contentType: att.contentType,
+        contentBytes: att.contentBytes,
+      });
+    }
+  }
 
   // Send the draft
   await client.api(`/me/messages/${draft.id}/send`).post({});
@@ -60,7 +80,7 @@ export async function checkForReplies(
   try {
     const messages = await client
       .api("/me/messages")
-      .filter(`conversationId eq '${conversationId}'`)
+      .filter(`conversationId eq '${conversationId.replace(/'/g, "''")}'`)
       .select("id,from,receivedDateTime")
       .orderby("receivedDateTime desc")
       .top(10)

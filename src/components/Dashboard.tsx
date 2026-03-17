@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { signOut, useSession } from "next-auth/react";
 import { ContactsTab } from "./ContactsTab";
 import { TemplatesTab } from "./TemplatesTab";
 import { SendEmailsTab } from "./SendEmailsTab";
+import type { User } from "@/types";
 
 const TABS = ["Contacts", "Templates", "Send Emails"] as const;
 type Tab = (typeof TABS)[number];
@@ -12,6 +13,40 @@ type Tab = (typeof TABS)[number];
 export function Dashboard() {
   const [activeTab, setActiveTab] = useState<Tab>("Contacts");
   const { data: session } = useSession();
+  const [users, setUsers] = useState<User[]>([]);
+  const [selectedUserId, setSelectedUserId] = useState<string>("");
+  const hasFetched = useRef(false);
+  const hasSetDefault = useRef(false);
+
+  const fetchUsers = useCallback(async () => {
+    try {
+      const res = await fetch("/api/users");
+      if (res.ok) {
+        const data = await res.json();
+        setUsers(data);
+      }
+    } catch {
+      // silently fail
+    }
+  }, []);
+
+  useEffect(() => {
+    if (hasFetched.current) return;
+    hasFetched.current = true;
+    fetchUsers();
+  }, [fetchUsers]);
+
+  // Default selectedUserId to the logged-in user once on initial load only
+  useEffect(() => {
+    if (hasSetDefault.current) return;
+    if (users.length > 0 && session?.userId) {
+      hasSetDefault.current = true;
+      const currentUser = users.find((u) => u.id === session.userId);
+      if (currentUser) {
+        setSelectedUserId(currentUser.id);
+      }
+    }
+  }, [users, session?.userId]);
 
   return (
     <div className="min-h-screen bg-[var(--color-warm-50)] transition-all-smooth">
@@ -68,9 +103,22 @@ export function Dashboard() {
       {/* Tab Content */}
       <main className="max-w-6xl mx-auto px-6 py-10 animate-in fade-in duration-500">
         <div className="bg-white card-polished p-6 sm:p-8 overflow-hidden">
-          {activeTab === "Contacts" && <ContactsTab />}
+          {activeTab === "Contacts" && (
+            <ContactsTab
+              users={users}
+              selectedUserId={selectedUserId}
+              onChangeUserId={setSelectedUserId}
+              currentUserId={session?.userId || ""}
+            />
+          )}
           {activeTab === "Templates" && <TemplatesTab />}
-          {activeTab === "Send Emails" && <SendEmailsTab />}
+          {activeTab === "Send Emails" && (
+            <SendEmailsTab
+              users={users}
+              selectedUserId={selectedUserId}
+              onChangeUserId={setSelectedUserId}
+            />
+          )}
         </div>
       </main>
     </div>

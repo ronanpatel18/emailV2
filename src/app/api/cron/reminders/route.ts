@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { sendMail, checkForReplies, refreshAccessToken } from "@/lib/graph";
+import { escapeHtml, formatChicagoDate } from "@/lib/template-utils";
 
 export async function GET(req: NextRequest) {
   // Verify cron secret
@@ -105,13 +106,13 @@ export async function GET(req: NextRequest) {
           const contact = email.contacts as { name: string; email: string } | null;
           await sendMail({
             to: reminderTo,
-            subject: `Reminder: No reply from ${contact?.name || "Unknown"} (${contact?.email || "Unknown"})`,
+            subject: `Reminder: No reply from ${(contact?.name || "Unknown").replace(/[<>"]/g, "")} (${(contact?.email || "Unknown").replace(/[<>"]/g, "")})`,
             htmlBody: `
               <p>No reply received for the following email:</p>
               <ul>
-                <li><strong>Contact:</strong> ${contact?.name || "Unknown"} (${contact?.email || "Unknown"})</li>
-                <li><strong>Subject:</strong> ${email.subject || "N/A"}</li>
-                <li><strong>Sent:</strong> ${new Date(email.sent_at).toLocaleDateString()}</li>
+                <li><strong>Contact:</strong> ${escapeHtml(contact?.name || "Unknown")} (${escapeHtml(contact?.email || "Unknown")})</li>
+                <li><strong>Subject:</strong> ${escapeHtml(email.subject || "N/A")}</li>
+                <li><strong>Sent:</strong> ${formatChicagoDate(email.sent_at)}</li>
               </ul>
               <p>Consider following up manually.</p>
             `,

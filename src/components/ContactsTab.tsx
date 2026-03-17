@@ -1,12 +1,19 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import type { Contact } from "@/types";
+import type { Contact, User } from "@/types";
 import { Spinner } from "./Spinner";
 import { useToast } from "./Toast";
-import { formatPhoneNumber } from "@/lib/template-utils";
+import { formatChicagoDate } from "@/lib/template-utils";
 
-export function ContactsTab() {
+interface ContactsTabProps {
+  users: User[];
+  selectedUserId: string;
+  onChangeUserId: (id: string) => void;
+  currentUserId: string;
+}
+
+export function ContactsTab({ users, selectedUserId, onChangeUserId, currentUserId }: ContactsTabProps) {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -15,14 +22,16 @@ export function ContactsTab() {
     name: "",
     email: "",
     company: "",
-    phone_number: "",
-    address: "",
+    assigned_to: "",
   });
   const [saving, setSaving] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [sheetUrl, setSheetUrl] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
   const { showToast, ToastComponent } = useToast();
   const hasFetched = useRef(false);
+  const syncIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const refreshIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchContacts = useCallback(async () => {
     try {
@@ -32,11 +41,21 @@ export function ContactsTab() {
         setContacts(data);
       }
     } catch {
-      // silently fail — avoid toast in data fetch to prevent re-render loops
+      // silently fail
     } finally {
       setLoading(false);
     }
   }, []);
+
+  // Background sync: pull from sheet then refresh contacts
+  const backgroundSync = useCallback(async () => {
+    try {
+      await fetch("/api/sync/sheets", { method: "POST" });
+      await fetchContacts();
+    } catch {
+      // silently fail on background sync
+    }
+  }, [fetchContacts]);
 
   useEffect(() => {
     if (hasFetched.current) return;
@@ -44,17 +63,28 @@ export function ContactsTab() {
 
     fetchContacts();
 
-    // Fetch Google Sheet URL in background — don't trigger re-renders
+    // Fetch Google Sheet URL
     fetch("/api/sync/sheets")
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (data?.url) setSheetUrl(data.url);
       })
       .catch(() => {});
-  }, [fetchContacts]);
+
+    // Auto-refresh contacts from DB every 10 seconds
+    refreshIntervalRef.current = setInterval(fetchContacts, 10000);
+
+    // Full sheet sync every 60 seconds
+    syncIntervalRef.current = setInterval(backgroundSync, 60000);
+
+    return () => {
+      if (refreshIntervalRef.current) clearInterval(refreshIntervalRef.current);
+      if (syncIntervalRef.current) clearInterval(syncIntervalRef.current);
+    };
+  }, [fetchContacts, backgroundSync]);
 
   const resetForm = () => {
-    setForm({ name: "", email: "", company: "", phone_number: "", address: "" });
+    setForm({ name: "", email: "", company: "", assigned_to: "" });
     setEditing(null);
     setShowForm(false);
   };
@@ -63,24 +93,17 @@ export function ContactsTab() {
     e.preventDefault();
     setSaving(true);
 
-    const payload = {
-      ...form,
-      phone_number: form.phone_number
-        ? formatPhoneNumber(form.phone_number)
-        : "",
-    };
-
     try {
       const res = editing
         ? await fetch("/api/contacts", {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ id: editing.id, ...payload }),
+            body: JSON.stringify({ id: editing.id, ...form }),
           })
         : await fetch("/api/contacts", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
+            body: JSON.stringify(form),
           });
 
       if (res.ok) {
@@ -120,8 +143,7 @@ export function ContactsTab() {
       name: contact.name,
       email: contact.email,
       company: contact.company || "",
-      phone_number: contact.phone_number || "",
-      address: contact.address || "",
+      assigned_to: contact.assigned_to || "",
     });
     setShowForm(true);
   };
@@ -149,6 +171,36 @@ export function ContactsTab() {
     }
   };
 
+  // Filter contacts by selected person
+  const personFilteredContacts = selectedUserId
+    ? contacts.filter((c) => c.assigned_to === selectedUserId)
+    : contacts;
+
+  // Check if selected user has any contacts assigned — if not, show all (master view)
+  const hasPersonalContacts = selectedUserId
+    ? contacts.some((c) => c.assigned_to === selectedUserId)
+    : false;
+
+  const displayContacts =
+    selectedUserId && hasPersonalContacts
+      ? personFilteredContacts
+      : contacts;
+
+  // Apply search filter
+  const filteredContacts = searchQuery
+    ? displayContacts.filter((c) => {
+        const q = searchQuery.toLowerCase();
+        return (
+          c.name.toLowerCase().includes(q) ||
+          c.email.toLowerCase().includes(q) ||
+          (c.company || "").toLowerCase().includes(q) ||
+          (c.assigned_to_name || "").toLowerCase().includes(q)
+        );
+      })
+    : displayContacts;
+
+  const showingMaster = !selectedUserId || !hasPersonalContacts;
+
   if (loading) {
     return (
       <div className="flex justify-center py-12">
@@ -167,7 +219,7 @@ export function ContactsTab() {
           <div>
             <h3 className="text-sm font-semibold text-[var(--color-warm-900)]">Shared Google Sheet</h3>
             <p className="text-xs text-[var(--color-warm-600)] mt-0.5">
-              Edit contacts directly in Google Sheets. Changes sync automatically, or press Sync Now.
+              Edit contacts directly in Google Sheets. Changes sync automatically every 60s, or press Sync Now.
             </p>
           </div>
           <div className="flex gap-2">
@@ -192,9 +244,43 @@ export function ContactsTab() {
         </div>
       </div>
 
+      {/* Person / Sheet Selector */}
+      <div className="flex items-center gap-3 mb-4">
+        <label className="text-sm font-medium text-[var(--color-warm-700)]">View Sheet:</label>
+        <select
+          value={selectedUserId}
+          onChange={(e) => onChangeUserId(e.target.value)}
+          className="input-polished bg-white max-w-xs text-sm"
+        >
+          <option value="">All Contacts (Master)</option>
+          {users.map((u) => (
+            <option key={u.id} value={u.id}>
+              {u.name || u.email}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {/* Info banner when showing master view as fallback */}
+      {selectedUserId && !hasPersonalContacts && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4 text-xs text-blue-700">
+          No contacts assigned to this person yet. Showing all contacts (Master view).
+          Assign contacts using the &ldquo;Assigned To&rdquo; field to create their personal sheet.
+        </div>
+      )}
+
       {/* Actions Bar */}
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-2xl font-semibold">Contacts</h2>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-2xl font-semibold">
+          Contacts
+          {showingMaster ? (
+            <span className="text-sm font-normal text-[var(--color-warm-500)] ml-2">(Master)</span>
+          ) : (
+            <span className="text-sm font-normal text-[var(--color-warm-500)] ml-2">
+              ({users.find((u) => u.id === selectedUserId)?.name || "Personal"})
+            </span>
+          )}
+        </h2>
         <button
           onClick={() => {
             resetForm();
@@ -204,6 +290,17 @@ export function ContactsTab() {
         >
           Add Contact
         </button>
+      </div>
+
+      {/* Search Bar */}
+      <div className="mb-4">
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="Search by name, email, company, or assigned to..."
+          className="input-polished w-full max-w-md"
+        />
       </div>
 
       {/* Add/Edit Form */}
@@ -250,28 +347,20 @@ export function ContactsTab() {
             </div>
             <div>
               <label className="block text-sm font-medium text-[var(--color-warm-700)] mb-1">
-                Phone
+                Assigned To
               </label>
-              <input
-                type="text"
-                value={form.phone_number}
-                onChange={(e) =>
-                  setForm({ ...form, phone_number: e.target.value })
-                }
-                placeholder="(555) 123-4567"
-                className="input-polished"
-              />
-            </div>
-            <div className="col-span-2">
-              <label className="block text-sm font-medium text-[var(--color-warm-700)] mb-1">
-                Address
-              </label>
-              <input
-                type="text"
-                value={form.address}
-                onChange={(e) => setForm({ ...form, address: e.target.value })}
-                className="input-polished"
-              />
+              <select
+                value={form.assigned_to}
+                onChange={(e) => setForm({ ...form, assigned_to: e.target.value })}
+                className="input-polished bg-white"
+              >
+                <option value="">Unassigned</option>
+                {users.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.name || u.email}
+                  </option>
+                ))}
+              </select>
             </div>
             <div className="col-span-2 flex gap-2 justify-end">
               <button
@@ -308,13 +397,13 @@ export function ContactsTab() {
                 Company
               </th>
               <th className="text-left px-4 py-3 font-medium text-[var(--color-warm-600)]">
-                Phone
-              </th>
-              <th className="text-left px-4 py-3 font-medium text-[var(--color-warm-600)]">
-                Address
+                Assigned To
               </th>
               <th className="text-left px-4 py-3 font-medium text-[var(--color-warm-600)]">
                 Last Sent
+              </th>
+              <th className="text-left px-4 py-3 font-medium text-[var(--color-warm-600)]">
+                Sent By
               </th>
               <th className="text-right px-4 py-3 font-medium text-[var(--color-warm-600)]">
                 Actions
@@ -322,17 +411,19 @@ export function ContactsTab() {
             </tr>
           </thead>
           <tbody>
-            {contacts.length === 0 ? (
+            {filteredContacts.length === 0 ? (
               <tr>
                 <td
                   colSpan={7}
                   className="text-center py-8 text-[var(--color-warm-400)] text-sm"
                 >
-                  No contacts yet. Add your first contact above.
+                  {searchQuery
+                    ? "No contacts match your search."
+                    : "No contacts yet. Add your first contact above."}
                 </td>
               </tr>
             ) : (
-              contacts.map((contact, idx) => (
+              filteredContacts.map((contact, idx) => (
                 <tr
                   key={contact.id}
                   className={`border-b border-[var(--color-warm-200)] ${
@@ -345,15 +436,15 @@ export function ContactsTab() {
                     {contact.company || "—"}
                   </td>
                   <td className="px-4 py-3 text-[var(--color-warm-600)]">
-                    {contact.phone_number || "—"}
-                  </td>
-                  <td className="px-4 py-3 text-[var(--color-warm-600)]">
-                    {contact.address || "—"}
+                    {contact.assigned_to_name || "—"}
                   </td>
                   <td className="px-4 py-3 text-[var(--color-warm-600)]">
                     {contact.last_sent_at
-                      ? new Date(contact.last_sent_at).toLocaleDateString()
+                      ? formatChicagoDate(contact.last_sent_at)
                       : "—"}
+                  </td>
+                  <td className="px-4 py-3 text-[var(--color-warm-600)]">
+                    {contact.last_sent_by_name || "—"}
                   </td>
                   <td className="px-4 py-3 text-right">
                     <button
@@ -374,6 +465,12 @@ export function ContactsTab() {
             )}
           </tbody>
         </table>
+      </div>
+
+      <div className="mt-3 text-xs text-[var(--color-warm-400)]">
+        {filteredContacts.length} contact{filteredContacts.length !== 1 ? "s" : ""}
+        {searchQuery && ` matching "${searchQuery}"`}
+        {" · "}Times shown in Chicago (CT) timezone
       </div>
     </div>
   );

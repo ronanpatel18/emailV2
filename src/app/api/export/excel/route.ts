@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase";
 import ExcelJS from "exceljs";
+import { formatChicagoDate } from "@/lib/template-utils";
 
 export async function GET() {
   const session = await auth();
@@ -22,21 +23,39 @@ export async function GET() {
     );
   }
 
+  // Get all users for name resolution
+  const { data: allUsers } = await supabaseAdmin
+    .from("users")
+    .select("id, name");
+
+  const userIdToName = new Map<string, string>();
+  if (allUsers) {
+    for (const u of allUsers) {
+      if (u.name) userIdToName.set(u.id, u.name);
+    }
+  }
+
   // Get last email tracking per contact
   const contactIds = contacts.map((c) => c.id);
   const { data: tracking } = await supabaseAdmin
     .from("email_tracking")
-    .select("contact_id, sent_at, subject")
+    .select("contact_id, sent_at, subject, sent_by")
     .in("contact_id", contactIds.length > 0 ? contactIds : ["none"])
     .order("sent_at", { ascending: false });
 
-  const lastSentMap = new Map<string, { sent_at: string; subject: string }>();
+  const lastSentMap = new Map<
+    string,
+    { sent_at: string; subject: string; sent_by_name: string }
+  >();
   if (tracking) {
     for (const t of tracking) {
       if (!lastSentMap.has(t.contact_id)) {
         lastSentMap.set(t.contact_id, {
           sent_at: t.sent_at,
           subject: t.subject,
+          sent_by_name: t.sent_by
+            ? userIdToName.get(t.sent_by) || ""
+            : "",
         });
       }
     }
@@ -50,10 +69,10 @@ export async function GET() {
     { header: "Name", key: "name", width: 25 },
     { header: "Email", key: "email", width: 30 },
     { header: "Company", key: "company", width: 25 },
-    { header: "Phone Number", key: "phone_number", width: 18 },
-    { header: "Address", key: "address", width: 35 },
-    { header: "Last Email Sent", key: "last_sent", width: 20 },
+    { header: "Assigned To", key: "assigned_to", width: 20 },
+    { header: "Last Email Sent", key: "last_sent", width: 22 },
     { header: "Last Email Subject", key: "last_subject", width: 35 },
+    { header: "Sent By", key: "sent_by", width: 20 },
   ];
 
   // Style header row
@@ -71,12 +90,12 @@ export async function GET() {
       name: contact.name,
       email: contact.email,
       company: contact.company || "",
-      phone_number: contact.phone_number || "",
-      address: contact.address || "",
-      last_sent: lastSent
-        ? new Date(lastSent.sent_at).toLocaleDateString()
+      assigned_to: contact.assigned_to
+        ? userIdToName.get(contact.assigned_to) || ""
         : "",
+      last_sent: lastSent ? formatChicagoDate(lastSent.sent_at) : "",
       last_subject: lastSent?.subject || "",
+      sent_by: lastSent?.sent_by_name || "",
     });
   }
 

@@ -7,6 +7,7 @@ import {
   plainTextToHtml,
 } from "@/lib/template-utils";
 import { convertDocxToStyledHtml } from "@/lib/docx-to-html";
+import { pushContactsToSheet } from "@/lib/google-sheets";
 import type { Contact, Template } from "@/types";
 
 export async function POST(req: NextRequest) {
@@ -16,9 +17,10 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json();
-  const { templateId, contactIds } = body as {
+  const { templateId, contactIds, attachmentIds } = body as {
     templateId: string;
     contactIds: string[];
+    attachmentIds?: string[];
   };
 
   if (!templateId || !contactIds?.length) {
@@ -55,12 +57,46 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // Fetch PDF attachments if any
+  const emailAttachments: Array<{
+    name: string;
+    contentType: string;
+    contentBytes: string;
+  }> = [];
+
+  if (attachmentIds && attachmentIds.length > 0) {
+    const { data: attachments } = await supabaseAdmin
+      .from("attachments")
+      .select("*")
+      .in("id", attachmentIds);
+
+    if (attachments) {
+      for (const att of attachments) {
+        const { data: fileData, error: downloadError } =
+          await supabaseAdmin.storage
+            .from("attachments")
+            .download(att.storage_path);
+
+        if (downloadError || !fileData) {
+          console.error(`Failed to download attachment ${att.file_name}:`, downloadError);
+          continue;
+        }
+
+        const buffer = Buffer.from(await fileData.arrayBuffer());
+        emailAttachments.push({
+          name: att.file_name,
+          contentType: att.content_type || "application/pdf",
+          contentBytes: buffer.toString("base64"),
+        });
+      }
+    }
+  }
+
   // Get HTML body from template
   let templateHtml: string;
   const typedTemplate = template as Template;
 
   if (typedTemplate.type === "docx" && typedTemplate.docx_storage_path) {
-    // Download DOCX from Supabase Storage
     const { data: fileData, error: downloadError } = await supabaseAdmin.storage
       .from("templates")
       .download(typedTemplate.docx_storage_path);
@@ -101,6 +137,7 @@ export async function POST(req: NextRequest) {
         subject: personalizedSubject,
         htmlBody: personalizedBody,
         accessToken: session.accessToken,
+        attachments: emailAttachments.length > 0 ? emailAttachments : undefined,
       });
 
       // Record in email_tracking
@@ -123,6 +160,9 @@ export async function POST(req: NextRequest) {
       );
     }
   }
+
+  // Update Google Sheet with new tracking data
+  pushContactsToSheet().catch(console.error);
 
   return NextResponse.json({
     success: successCount,

@@ -9,7 +9,7 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Get contacts with last email info
+  // Get contacts
   const { data: contacts, error } = await supabaseAdmin
     .from("contacts")
     .select("*")
@@ -19,22 +19,39 @@ export async function GET() {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  // Get last email tracking for each contact
+  // Get all users for name resolution
+  const { data: allUsers } = await supabaseAdmin
+    .from("users")
+    .select("id, name");
+
+  const userIdToName = new Map<string, string>();
+  if (allUsers) {
+    for (const u of allUsers) {
+      if (u.name) userIdToName.set(u.id, u.name);
+    }
+  }
+
+  // Get last email tracking for each contact (with sender)
   const contactIds = contacts.map((c) => c.id);
   const { data: tracking } = await supabaseAdmin
     .from("email_tracking")
-    .select("contact_id, sent_at, subject")
+    .select("contact_id, sent_at, subject, sent_by")
     .in("contact_id", contactIds.length > 0 ? contactIds : ["none"])
     .order("sent_at", { ascending: false });
 
-  // Map last sent info to contacts
-  const lastSentMap = new Map<string, { sent_at: string; subject: string }>();
+  const lastSentMap = new Map<
+    string,
+    { sent_at: string; subject: string; sent_by_name: string }
+  >();
   if (tracking) {
     for (const t of tracking) {
       if (!lastSentMap.has(t.contact_id)) {
         lastSentMap.set(t.contact_id, {
           sent_at: t.sent_at,
           subject: t.subject,
+          sent_by_name: t.sent_by
+            ? userIdToName.get(t.sent_by) || ""
+            : "",
         });
       }
     }
@@ -44,6 +61,10 @@ export async function GET() {
     ...c,
     last_sent_at: lastSentMap.get(c.id)?.sent_at || null,
     last_subject: lastSentMap.get(c.id)?.subject || null,
+    last_sent_by_name: lastSentMap.get(c.id)?.sent_by_name || null,
+    assigned_to_name: c.assigned_to
+      ? userIdToName.get(c.assigned_to) || null
+      : null,
   }));
 
   return NextResponse.json(contactsWithTracking);
@@ -56,7 +77,7 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json();
-  const { name, email, company, phone_number, address } = body;
+  const { name, email, company, assigned_to } = body;
 
   if (!name || !email) {
     return NextResponse.json(
@@ -71,8 +92,7 @@ export async function POST(req: NextRequest) {
       name,
       email,
       company: company || null,
-      phone_number: phone_number || null,
-      address: address || null,
+      assigned_to: assigned_to || null,
       created_by: session.userId,
     })
     .select()
@@ -82,7 +102,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  // Regenerate shared Excel in background (don't block response)
   pushContactsToSheet().catch(console.error);
 
   return NextResponse.json(data, { status: 201 });
@@ -95,7 +114,7 @@ export async function PUT(req: NextRequest) {
   }
 
   const body = await req.json();
-  const { id, name, email, company, phone_number, address } = body;
+  const { id, name, email, company, assigned_to } = body;
 
   if (!id) {
     return NextResponse.json(
@@ -110,8 +129,7 @@ export async function PUT(req: NextRequest) {
       name,
       email,
       company: company || null,
-      phone_number: phone_number || null,
-      address: address || null,
+      assigned_to: assigned_to || null,
     })
     .eq("id", id)
     .select()

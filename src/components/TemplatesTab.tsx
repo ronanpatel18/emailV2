@@ -171,8 +171,6 @@ export function TemplatesTab() {
             "{{name}}",
             "{{email}}",
             "{{company}}",
-            "{{phoneNumber}}",
-            "{{address}}",
           ].map((v) => (
             <code
               key={v}

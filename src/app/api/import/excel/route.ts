@@ -40,8 +40,6 @@ export async function POST(req: NextRequest) {
     if (value.includes("name") && !value.includes("company")) headers.name = colNumber;
     if (value.includes("email")) headers.email = colNumber;
     if (value.includes("company")) headers.company = colNumber;
-    if (value.includes("phone")) headers.phone_number = colNumber;
-    if (value.includes("address")) headers.address = colNumber;
   });
 
   if (!headers.name || !headers.email) {
@@ -71,12 +69,6 @@ export async function POST(req: NextRequest) {
       company: headers.company
         ? String(row.getCell(headers.company).value || "").trim() || null
         : null,
-      phone_number: headers.phone_number
-        ? String(row.getCell(headers.phone_number).value || "").trim() || null
-        : null,
-      address: headers.address
-        ? String(row.getCell(headers.address).value || "").trim() || null
-        : null,
     };
 
     // Upsert: check if contact with this email exists
@@ -87,9 +79,10 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (existing) {
+      // Only update fields that the import knows about; preserve assigned_to
       await supabaseAdmin
         .from("contacts")
-        .update(contactData)
+        .update({ name: contactData.name, email: contactData.email, company: contactData.company })
         .eq("id", existing.id);
       updated++;
     } else {

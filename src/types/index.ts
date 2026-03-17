@@ -10,13 +10,14 @@ export interface Contact {
   name: string;
   email: string;
   company: string | null;
-  phone_number: string | null;
-  address: string | null;
+  assigned_to: string | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
   last_sent_at?: string | null;
   last_subject?: string | null;
+  last_sent_by_name?: string | null;
+  assigned_to_name?: string | null;
 }
 
 export interface Template {
@@ -42,6 +43,16 @@ export interface EmailTracking {
   conversation_id: string | null;
   replied_at: string | null;
   reminder_sent_at: string | null;
+}
+
+export interface Attachment {
+  id: string;
+  file_name: string;
+  storage_path: string;
+  content_type: string;
+  size_bytes: number;
+  uploaded_by: string | null;
+  created_at: string;
 }
 
 export interface AccessGroup {
