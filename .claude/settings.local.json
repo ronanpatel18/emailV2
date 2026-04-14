@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npx next:*)"
+      "Bash(npx next:*)",
+      "mcp__21st-dev__21st_magic_component_inspiration",
+      "Bash(npx tsc:*)"
     ]
   }
 }

@@ -7,7 +7,7 @@ import {
 } from "@/lib/google-sheets";
 
 /**
- * GET — Get the Google Sheet URL and trigger a push (Supabase → Sheet).
+ * GET — Return the Google Sheet URL. No network calls required.
  */
 export async function GET() {
   const session = await auth();
@@ -16,11 +16,10 @@ export async function GET() {
   }
 
   try {
-    await pushContactsToSheet();
     return NextResponse.json({ url: getSheetUrl() });
   } catch (err) {
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Push to sheet failed" },
+      { error: err instanceof Error ? err.message : "Sheet not configured" },
       { status: 500 }
     );
   }
