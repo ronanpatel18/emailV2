@@ -362,6 +362,14 @@ export async function pushContactsToSheet(): Promise<void> {
   // Update per-person sheets
   const existingSheets = await getExistingSheets(sheets, spreadsheetId);
 
+  // Ensure every known user has a sheet, even those with no contacts yet.
+  // This guarantees that a newly assigned user's sheet exists the moment they
+  // appear in the system.
+  for (const [, nm] of userIdToName) {
+    if (!nm) continue;
+    if (!personContacts.has(nm)) personContacts.set(nm, []);
+  }
+
   for (const [personName, pContacts] of personContacts) {
     const sheetId = await ensurePersonSheet(
       sheets,

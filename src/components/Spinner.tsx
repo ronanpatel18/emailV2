@@ -1,10 +1,18 @@
 export function Spinner({ className = "" }: { className?: string }) {
   return (
     <div
-      className={`inline-block animate-spin rounded-full border-2 border-[var(--color-warm-200)] border-t-[var(--color-accent-600)] h-5 w-5 ${className}`}
+      className={`spin ${className}`}
       role="status"
+      style={{
+        display: "inline-block",
+        width: 18,
+        height: 18,
+        borderRadius: "50%",
+        border: "2px solid var(--line-2)",
+        borderTopColor: "var(--ink)",
+      }}
     >
-      <span className="sr-only">Loading…</span>
+      <span style={{ position: "absolute", width: 1, height: 1, overflow: "hidden" }}>Loading…</span>
     </div>
   );
 }

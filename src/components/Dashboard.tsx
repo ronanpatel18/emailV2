@@ -5,56 +5,34 @@ import { signOut, useSession } from "next-auth/react";
 import { ContactsTab } from "./ContactsTab";
 import { TemplatesTab } from "./TemplatesTab";
 import { SendEmailsTab } from "./SendEmailsTab";
+import { initials, useReveal } from "./wsbc-ui";
 import type { User } from "@/types";
 
-const TABS = ["Contacts", "Templates", "Send Emails"] as const;
-type Tab = (typeof TABS)[number];
-
-const TAB_ICONS: Record<Tab, React.ReactNode> = {
-  Contacts: (
-    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-    </svg>
-  ),
-  Templates: (
-    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-    </svg>
-  ),
-  "Send Emails": (
-    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-    </svg>
-  ),
-};
-
-function getInitials(email: string) {
-  if (!email) return "?";
-  const parts = email.split("@")[0].split(/[._-]/);
-  return parts
-    .slice(0, 2)
-    .map((p) => p[0]?.toUpperCase() ?? "")
-    .join("");
-}
+type TabId = "contacts" | "templates" | "send";
+const TABS: { id: TabId; label: string; idx: string }[] = [
+  { id: "contacts", label: "Contacts", idx: "01" },
+  { id: "templates", label: "Templates", idx: "02" },
+  { id: "send", label: "Send Emails", idx: "03" },
+];
 
 export function Dashboard() {
-  const [activeTab, setActiveTab] = useState<Tab>("Contacts");
+  const [tab, setTab] = useState<TabId>(() => {
+    if (typeof window === "undefined") return "contacts";
+    return (localStorage.getItem("wsbc_tab") as TabId) || "contacts";
+  });
   const { data: session } = useSession();
   const [users, setUsers] = useState<User[]>([]);
   const [selectedUserId, setSelectedUserId] = useState<string>("");
   const hasFetched = useRef(false);
   const hasSetDefault = useRef(false);
 
+  useReveal(tab);
+
   const fetchUsers = useCallback(async () => {
     try {
       const res = await fetch("/api/users");
-      if (res.ok) {
-        const data = await res.json();
-        setUsers(data);
-      }
-    } catch {
-      // silently fail
-    }
+      if (res.ok) setUsers(await res.json());
+    } catch { /* ignore */ }
   }, []);
 
   useEffect(() => {
@@ -67,102 +45,189 @@ export function Dashboard() {
     if (hasSetDefault.current) return;
     if (users.length > 0 && session?.userId) {
       hasSetDefault.current = true;
-      const currentUser = users.find((u) => u.id === session.userId);
-      if (currentUser) setSelectedUserId(currentUser.id);
+      const u = users.find((x) => x.id === session.userId);
+      if (u) setSelectedUserId(u.id);
     }
   }, [users, session?.userId]);
 
-  const userEmail = session?.user?.email ?? "";
-  const initials = getInitials(userEmail);
+  useEffect(() => {
+    localStorage.setItem("wsbc_tab", tab);
+  }, [tab]);
+
+  const userName = session?.user?.name || session?.user?.email || "";
+  const userEmail = session?.user?.email || "";
 
   return (
-    <div className="min-h-screen bg-[var(--color-warm-50)]">
-      {/* ── Header ───────────────────────────────────── */}
-      <header className="bg-white border-b border-[var(--color-warm-200)] sticky top-0 z-20 shadow-[0_1px_0_0_var(--color-warm-200)]">
-        <div className="max-w-6xl mx-auto px-5 h-14 flex items-center justify-between">
-          {/* Logo */}
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center shadow-sm flex-shrink-0"
-              style={{ background: "linear-gradient(135deg, #4f46e5 0%, #818cf8 100%)" }}>
-              <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-              </svg>
+    <div style={{ minHeight: "100vh", background: "var(--paper)" }}>
+      {/* TOP NAV */}
+      <header
+        style={{
+          borderBottom: "1px solid var(--line)",
+          background: "var(--paper)",
+          position: "sticky",
+          top: 0,
+          zIndex: 20,
+        }}
+      >
+        <div
+          style={{
+            maxWidth: 1320,
+            margin: "0 auto",
+            padding: "0 40px",
+            height: 60,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+            <div
+              style={{
+                width: 28, height: 28,
+                background: "var(--ink)", color: "var(--paper)",
+                borderRadius: 6,
+                display: "grid", placeItems: "center",
+                fontFamily: "var(--font-display)",
+                fontSize: 17, fontStyle: "italic",
+              }}
+            >
+              W
             </div>
-            <span className="text-base font-semibold text-[var(--color-warm-900)] tracking-tight">
-              Email Manager
-            </span>
+            <div style={{ lineHeight: 1 }}>
+              <div style={{ fontSize: 13, fontWeight: 500, letterSpacing: "-0.01em" }}>
+                WSBC <span style={{ color: "var(--ink-3)" }}>·</span> Email Manager
+              </div>
+              <div
+                className="mono"
+                style={{ fontSize: 10, letterSpacing: "0.1em", color: "var(--ink-4)", marginTop: 3 }}
+              >
+                WISCONSIN SPORTS BUSINESS CONFERENCE
+              </div>
+            </div>
           </div>
 
-          {/* Right side */}
-          <div className="flex items-center gap-3">
-            {userEmail && (
-              <div className="hidden sm:flex items-center gap-2.5 pr-3 border-r border-[var(--color-warm-200)]">
-                <div className="avatar-initials">{initials}</div>
-                <span className="text-sm text-[var(--color-warm-600)] font-medium max-w-[180px] truncate">
-                  {userEmail}
-                </span>
+          {userEmail && (
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <div className="avatar">{initials(userName)}</div>
+              <div style={{ lineHeight: 1.2 }}>
+                <div style={{ fontSize: 12.5, fontWeight: 500 }}>{userName}</div>
+                <div style={{ fontSize: 11, color: "var(--ink-4)" }}>{userEmail}</div>
               </div>
-            )}
-            <button
-              onClick={() => signOut({ callbackUrl: "/signin" })}
-              className="btn-ghost text-[var(--color-warm-500)] flex items-center gap-1.5"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-              </svg>
-              Sign Out
-            </button>
-          </div>
+              <button
+                className="btn btn-ghost"
+                onClick={() => signOut({ callbackUrl: "/signin" })}
+                title="Sign out"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                  <path d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+            </div>
+          )}
         </div>
       </header>
 
-      {/* ── Tab Navigation ───────────────────────────── */}
-      <div className="bg-white border-b border-[var(--color-warm-200)]">
-        <div className="max-w-6xl mx-auto px-5">
-          <nav className="flex gap-1 overflow-x-auto no-scrollbar py-2">
-            {TABS.map((tab) => {
-              const isActive = activeTab === tab;
-              return (
-                <button
-                  key={tab}
-                  onClick={() => setActiveTab(tab)}
-                  className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-all duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-accent-500)] ${
-                    isActive
-                      ? "bg-[var(--color-accent-50)] text-[var(--color-accent-700)] shadow-[inset_0_0_0_1px_var(--color-accent-200)]"
-                      : "text-[var(--color-warm-500)] hover:bg-[var(--color-warm-100)] hover:text-[var(--color-warm-800)]"
-                  }`}
-                >
-                  <span className={isActive ? "text-[var(--color-accent-600)]" : "text-[var(--color-warm-400)]"}>
-                    {TAB_ICONS[tab]}
-                  </span>
-                  {tab}
-                </button>
-              );
-            })}
+      {/* TAB BAR */}
+      <div
+        style={{
+          borderBottom: "1px solid var(--line)",
+          background: "var(--paper)",
+          position: "sticky",
+          top: 60,
+          zIndex: 19,
+        }}
+      >
+        <div
+          style={{
+            maxWidth: 1320,
+            margin: "0 auto",
+            padding: "0 40px",
+            display: "flex",
+            alignItems: "end",
+            justifyContent: "space-between",
+          }}
+        >
+          <nav>
+            {TABS.map((t) => (
+              <button
+                key={t.id}
+                className={"tab" + (tab === t.id ? " active" : "")}
+                onClick={() => setTab(t.id)}
+              >
+                <span className="idx">{t.idx}</span>
+                {t.label}
+              </button>
+            ))}
           </nav>
+          <div
+            className="mono"
+            style={{ fontSize: 10.5, letterSpacing: "0.1em", color: "var(--ink-4)", paddingBottom: 14 }}
+          >
+            SPRING · 2026
+          </div>
         </div>
       </div>
 
-      {/* ── Tab Content ──────────────────────────────── */}
-      <main className="max-w-6xl mx-auto px-5 py-8">
-        <div className="bg-white rounded-xl border border-[var(--color-warm-200)] shadow-[0_1px_4px_0_rgb(0_0_0/0.05)] p-6 sm:p-8 overflow-hidden">
-          {activeTab === "Contacts" && (
-            <ContactsTab
-              users={users}
-              selectedUserId={selectedUserId}
-              onChangeUserId={setSelectedUserId}
-              currentUserId={session?.userId || ""}
-            />
-          )}
-          {activeTab === "Templates" && <TemplatesTab />}
-          {activeTab === "Send Emails" && (
-            <SendEmailsTab
-              users={users}
-              selectedUserId={selectedUserId}
-              onChangeUserId={setSelectedUserId}
-            />
-          )}
-        </div>
+      <main style={{ maxWidth: 1320, margin: "0 auto", padding: "0 40px 80px" }}>
+        {tab === "contacts" && (
+          <ContactsTab
+            users={users}
+            selectedUserId={selectedUserId}
+            onChangeUserId={setSelectedUserId}
+            currentUserId={session?.userId || ""}
+          />
+        )}
+        {tab === "templates" && <TemplatesTab />}
+        {tab === "send" && (
+          <SendEmailsTab
+            users={users}
+            selectedUserId={selectedUserId}
+            onChangeUserId={setSelectedUserId}
+          />
+        )}
+
+        <footer
+          style={{
+            marginTop: 80,
+            paddingTop: 28,
+            borderTop: "1px solid var(--line)",
+            display: "grid",
+            gridTemplateColumns: "1fr auto 1fr",
+            alignItems: "center",
+            gap: 20,
+          }}
+        >
+          <div
+            className="mono"
+            style={{ fontSize: 10.5, letterSpacing: "0.12em", color: "var(--ink-4)" }}
+          >
+            WSBC · INTERNAL · v2.6
+          </div>
+          <div
+            style={{
+              fontFamily: "var(--font-display)",
+              fontSize: 20,
+              color: "var(--ink-3)",
+              fontStyle: "italic",
+            }}
+          >
+            On, Wisconsin.
+          </div>
+          <div
+            className="mono"
+            style={{
+              fontSize: 10.5,
+              letterSpacing: "0.12em",
+              color: "var(--ink-4)",
+              textAlign: "right",
+            }}
+          >
+            {new Date()
+              .toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })
+              .toUpperCase()}{" "}
+            · MADISON, WI
+          </div>
+        </footer>
       </main>
     </div>
   );

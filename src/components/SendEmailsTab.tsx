@@ -1,9 +1,12 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import type { Contact, Template, User, Attachment } from "@/types";
 import { Spinner } from "./Spinner";
 import { useToast } from "./Toast";
+import { SectionHead, Step, TemplateLine, initials, fmtAgo, fmtKB, useReveal } from "./wsbc-ui";
+import { substituteVariables } from "@/lib/template-utils";
+import { useSession } from "next-auth/react";
 
 interface SendEmailsTabProps {
   users: User[];
@@ -11,45 +14,42 @@ interface SendEmailsTabProps {
   onChangeUserId: (id: string) => void;
 }
 
-function getInitials(name: string) {
-  if (!name) return "?";
-  return name.split(" ").slice(0, 2).map((p) => p[0]?.toUpperCase() ?? "").join("");
-}
-
-const avatarColors = [
-  "from-violet-400 to-violet-600",
-  "from-indigo-400 to-indigo-600",
-  "from-sky-400 to-sky-600",
-  "from-emerald-400 to-emerald-600",
-  "from-rose-400 to-rose-600",
-  "from-amber-400 to-amber-600",
-];
-
 export function SendEmailsTab({ users, selectedUserId, onChangeUserId }: SendEmailsTabProps) {
+  const { data: session } = useSession();
   const [templates, setTemplates] = useState<Template[]>([]);
+  const [senderTitle, setSenderTitle] = useState<string>("");
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
-  const [selectedTemplate, setSelectedTemplate] = useState("");
-  const [selectedContacts, setSelectedContacts] = useState<Set<string>>(new Set());
-  const [selectedAttachments, setSelectedAttachments] = useState<Set<string>>(new Set());
+  const [templateId, setTemplateId] = useState("");
+  const [sel, setSel] = useState<Set<string>>(new Set());
+  const [attSel, setAttSel] = useState<Set<string>>(new Set());
+  const [q, setQ] = useState("");
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const { showToast, ToastComponent } = useToast();
   const hasFetched = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  useReveal(contacts.length);
+
   const fetchData = useCallback(async () => {
     try {
-      const [templatesRes, contactsRes, attachmentsRes] = await Promise.all([
+      const [tRes, cRes, aRes, meRes] = await Promise.all([
         fetch("/api/templates"),
         fetch("/api/contacts"),
         fetch("/api/attachments"),
+        fetch("/api/users/me").catch(() => null),
       ]);
-      if (templatesRes.ok) setTemplates(await templatesRes.json());
-      if (contactsRes.ok) setContacts(await contactsRes.json());
-      if (attachmentsRes.ok) setAttachments(await attachmentsRes.json());
-    } catch { /* silently fail */ }
+      if (tRes.ok) setTemplates(await tRes.json());
+      if (cRes.ok) setContacts(await cRes.json());
+      if (aRes.ok) setAttachments(await aRes.json());
+      if (meRes && meRes.ok) {
+        const me = await meRes.json();
+        if (me?.title) setSenderTitle(me.title);
+      }
+    } catch { /* ignore */ }
     finally { setLoading(false); }
   }, []);
 
@@ -59,21 +59,30 @@ export function SendEmailsTab({ users, selectedUserId, onChangeUserId }: SendEma
     fetchData();
   }, [fetchData]);
 
-  const hasPersonalContacts = selectedUserId ? contacts.some((c) => c.assigned_to === selectedUserId) : false;
-  const displayContacts = selectedUserId && hasPersonalContacts
-    ? contacts.filter((c) => c.assigned_to === selectedUserId)
-    : contacts;
+  const hasPersonal = selectedUserId ? contacts.some((c) => c.assigned_to === selectedUserId) : false;
+  const display = selectedUserId && hasPersonal ? contacts.filter((c) => c.assigned_to === selectedUserId) : contacts;
+  const filtered = q
+    ? display.filter((c) =>
+        [c.name, c.email, c.company].filter(Boolean).some((s) => (s as string).toLowerCase().includes(q.toLowerCase()))
+      )
+    : display;
 
-  const toggleContact = (id: string) => {
-    setSelectedContacts((prev) => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
+  const tmpl = templates.find((t) => t.id === templateId);
+  const previewContact = Array.from(sel).map((id) => contacts.find((c) => c.id === id)).filter(Boolean)[0] as Contact | undefined;
+
+  const toggle = (id: string) => {
+    const n = new Set(sel);
+    n.has(id) ? n.delete(id) : n.add(id);
+    setSel(n);
   };
-
   const toggleAll = () => {
-    setSelectedContacts(selectedContacts.size === displayContacts.length ? new Set() : new Set(displayContacts.map((c) => c.id)));
+    if (sel.size === filtered.length) setSel(new Set());
+    else setSel(new Set(filtered.map((c) => c.id)));
   };
-
-  const toggleAttachment = (id: string) => {
-    setSelectedAttachments((prev) => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
+  const toggleAtt = (id: string) => {
+    const n = new Set(attSel);
+    n.has(id) ? n.delete(id) : n.add(id);
+    setAttSel(n);
   };
 
   const handleUploadPDFs = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -81,303 +90,346 @@ export function SendEmailsTab({ users, selectedUserId, onChangeUserId }: SendEma
     if (!files || files.length === 0) return;
     setUploading(true);
     try {
-      const formData = new FormData();
-      for (const file of Array.from(files)) formData.append("files", file);
-      const res = await fetch("/api/attachments", { method: "POST", body: formData });
+      const fd = new FormData();
+      for (const f of Array.from(files)) fd.append("files", f);
+      const res = await fetch("/api/attachments", { method: "POST", body: fd });
       if (res.ok) {
-        const uploaded = await res.json();
+        const uploaded: Attachment[] = await res.json();
         setAttachments((prev) => [...uploaded, ...prev]);
-        for (const att of uploaded) setSelectedAttachments((prev) => new Set([...prev, att.id]));
+        const n = new Set(attSel);
+        for (const a of uploaded) n.add(a.id);
+        setAttSel(n);
         showToast(`${uploaded.length} PDF(s) uploaded`);
       } else { const err = await res.json(); showToast(err.error || "Upload failed", "error"); }
     } catch { showToast("Failed to upload PDFs", "error"); }
     finally { setUploading(false); if (fileInputRef.current) fileInputRef.current.value = ""; }
   };
 
-  const handleDeleteAttachment = async (id: string) => {
+  const removeAtt = async (id: string) => {
     try {
       const res = await fetch(`/api/attachments?id=${id}`, { method: "DELETE" });
       if (res.ok) {
         setAttachments((prev) => prev.filter((a) => a.id !== id));
-        setSelectedAttachments((prev) => { const next = new Set(prev); next.delete(id); return next; });
-        showToast("Attachment deleted");
+        const n = new Set(attSel); n.delete(id); setAttSel(n);
+        showToast("Attachment removed");
       }
-    } catch { showToast("Failed to delete attachment", "error"); }
+    } catch { showToast("Failed to remove", "error"); }
   };
 
-  const handleSend = async () => {
-    if (!selectedTemplate) { showToast("Please select a template", "error"); return; }
-    if (selectedContacts.size === 0) { showToast("Please select at least one contact", "error"); return; }
-    const attCount = selectedAttachments.size;
-    if (!confirm(`Send emails to ${selectedContacts.size} contact(s)${attCount > 0 ? ` with ${attCount} PDF attachment(s)` : ""}?`)) return;
+  const canSend = !!templateId && sel.size > 0 && !sending;
+
+  const doSend = async () => {
+    setConfirmOpen(false);
     setSending(true);
     try {
       const res = await fetch("/api/send-emails", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          templateId: selectedTemplate,
-          contactIds: Array.from(selectedContacts),
-          attachmentIds: selectedAttachments.size > 0 ? Array.from(selectedAttachments) : undefined,
+          templateId,
+          contactIds: Array.from(sel),
+          attachmentIds: attSel.size > 0 ? Array.from(attSel) : undefined,
         }),
       });
       if (res.ok) {
         const result = await res.json();
         showToast(`Sent: ${result.success} success, ${result.failed} failed`);
-        setSelectedContacts(new Set());
+        setSel(new Set());
       } else { const err = await res.json(); showToast(err.error || "Send failed", "error"); }
     } catch { showToast("Failed to send emails", "error"); }
     finally { setSending(false); }
   };
 
-  if (loading) {
-    return <div className="flex justify-center py-16"><Spinner /></div>;
-  }
+  const senderCtx = useMemo(
+    () => ({
+      name: session?.user?.name || "",
+      email: session?.user?.email || "",
+      title: senderTitle || "",
+    }),
+    [session?.user?.name, session?.user?.email, senderTitle]
+  );
 
-  const allSelected = displayContacts.length > 0 && selectedContacts.size === displayContacts.length;
-  const canSend = !sending && selectedTemplate && selectedContacts.size > 0;
+  const renderedSubject = useMemo(
+    () =>
+      tmpl && previewContact
+        ? substituteVariables(tmpl.subject, previewContact, false, senderCtx)
+        : "",
+    [tmpl, previewContact, senderCtx]
+  );
+  const renderedBody = useMemo(() => {
+    if (!tmpl || !previewContact) return "";
+    if (tmpl.type === "docx") return "— .docx template will be rendered at send time —";
+    return substituteVariables(tmpl.body || "", previewContact, false, senderCtx);
+  }, [tmpl, previewContact, senderCtx]);
+
+  if (loading) {
+    return <div style={{ display: "flex", justifyContent: "center", padding: "80px 0" }}><Spinner /></div>;
+  }
 
   return (
     <div>
       {ToastComponent}
 
-      {/* ── Page Header ─────────────────────────────── */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h2 className="text-xl font-semibold text-[var(--color-warm-900)] tracking-tight">Send Emails</h2>
-          <p className="text-sm text-[var(--color-warm-500)] mt-0.5">
-            {selectedContacts.size > 0 ? `${selectedContacts.size} recipient${selectedContacts.size !== 1 ? "s" : ""} selected` : "Select a template and recipients"}
-          </p>
-        </div>
+      <SectionHead
+        no="§ 03"
+        eyebrow="Dispatch"
+        title="Send"
+        right={
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span className="eyebrow" style={{ fontSize: 10 }}>View</span>
+            <select className="field" value={selectedUserId} onChange={(e) => onChangeUserId(e.target.value)} style={{ width: "auto", minWidth: 160 }}>
+              <option value="">Master</option>
+              {users.map((u) => <option key={u.id} value={u.id}>{u.name || u.email}</option>)}
+            </select>
+          </div>
+        }
+      />
 
-        {/* View selector */}
-        <div className="flex items-center gap-2">
-          <label className="text-xs font-medium text-[var(--color-warm-500)]">View:</label>
-          <select
-            value={selectedUserId}
-            onChange={(e) => onChangeUserId(e.target.value)}
-            className="input-polished bg-white w-auto text-sm py-2"
-          >
-            <option value="">All (Master)</option>
-            {users.map((u) => <option key={u.id} value={u.id}>{u.name || u.email}</option>)}
-          </select>
-        </div>
+      {/* stepper */}
+      <div
+        className="reveal"
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+          gap: 0,
+          border: "1px solid var(--line)",
+          borderRadius: "var(--radius-lg)",
+          overflow: "hidden",
+          marginBottom: 20,
+        }}
+      >
+        <Step n="01" label="Template" value={tmpl ? tmpl.name : "Not selected"} done={!!tmpl} />
+        <Step n="02" label="Recipients" value={sel.size > 0 ? `${sel.size} selected` : "0 selected"} done={sel.size > 0} />
+        <Step n="03" label="Attachments" value={attSel.size > 0 ? `${attSel.size} PDFs` : "None"} done={attSel.size > 0} optional />
       </div>
 
-      {/* Info banner */}
-      {selectedUserId && !hasPersonalContacts && (
-        <div className="flex items-start gap-2.5 bg-[var(--color-accent-50)] border border-[var(--color-accent-200)] rounded-lg p-3 mb-5">
-          <svg className="w-4 h-4 text-[var(--color-accent-500)] mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <p className="text-xs text-[var(--color-accent-700)]">No contacts assigned to this person yet — showing all contacts (Master view).</p>
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        {/* ── Left column: Template + Attachments ─── */}
-        <div className="lg:col-span-1 space-y-4">
-          {/* Template */}
-          <div className="bg-white border border-[var(--color-warm-200)] rounded-xl p-4">
-            <p className="section-label mb-3">Template</p>
-            <select
-              value={selectedTemplate}
-              onChange={(e) => setSelectedTemplate(e.target.value)}
-              className="input-polished bg-white"
-            >
+      {/* workspace */}
+      <div
+        className="reveal"
+        style={{
+          display: "grid",
+          gridTemplateColumns: "minmax(300px, 360px) minmax(0, 1fr)",
+          gap: 20,
+          alignItems: "start",
+        }}
+      >
+        {/* LEFT */}
+        <div style={{ display: "grid", gap: 20, alignContent: "start", minWidth: 0 }}>
+          <div className="panel" style={{ padding: 18 }}>
+            <div className="eyebrow" style={{ marginBottom: 10 }}>Template</div>
+            <select className="field" value={templateId} onChange={(e) => setTemplateId(e.target.value)}>
               <option value="">Choose a template…</option>
               {templates.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name} ({t.type === "docx" ? "DOCX" : "Plain"}) — {t.subject}
-                </option>
+                <option key={t.id} value={t.id}>{t.name} · {t.type.toUpperCase()}</option>
               ))}
             </select>
-            {selectedTemplate && (
-              <div className="mt-2 flex items-center gap-1.5">
-                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
-                <p className="text-xs text-emerald-700 font-medium">Template selected</p>
+            {tmpl && (
+              <div style={{ marginTop: 12, padding: 12, background: "var(--paper-2)", borderRadius: "var(--radius)", border: "1px solid var(--line)" }}>
+                <div className="eyebrow" style={{ fontSize: 10 }}>Subject</div>
+                <div style={{ fontSize: 13, marginTop: 4, color: "var(--ink-2)" }}>
+                  <TemplateLine text={tmpl.subject} />
+                </div>
               </div>
             )}
           </div>
 
-          {/* Attachments */}
-          <div className="bg-white border border-[var(--color-warm-200)] rounded-xl p-4">
-            <div className="flex items-center justify-between mb-3">
-              <p className="section-label">PDF Attachments</p>
-              <span className="text-xs text-[var(--color-warm-400)]">
-                {selectedAttachments.size}/{attachments.length} selected
+          <div className="panel" style={{ padding: 18 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+              <span className="eyebrow">PDF Attachments</span>
+              <span className="mono" style={{ fontSize: 10.5, color: "var(--ink-4)" }}>
+                {attSel.size}/{attachments.length}
               </span>
             </div>
-
             <button
               type="button"
+              className="btn"
               onClick={() => fileInputRef.current?.click()}
               disabled={uploading}
-              className="btn-secondary-polished text-xs px-3 py-2 w-full mb-3 disabled:opacity-55"
+              style={{ width: "100%", justifyContent: "center", marginBottom: 10 }}
             >
-              {uploading ? (
-                <><Spinner className="h-3 w-3 border-[var(--color-warm-300)] border-t-[var(--color-warm-600)]" />Uploading…</>
-              ) : (
-                <><svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                </svg>Upload PDFs</>
-              )}
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              {uploading ? "Uploading…" : "Upload PDFs"}
             </button>
-            <input ref={fileInputRef} type="file" accept=".pdf" multiple onChange={handleUploadPDFs} className="hidden" />
-
+            <input ref={fileInputRef} type="file" accept=".pdf" multiple style={{ display: "none" }} onChange={handleUploadPDFs} />
             {attachments.length === 0 ? (
-              <p className="text-xs text-[var(--color-warm-400)] text-center py-2">No attachments uploaded</p>
+              <div style={{ textAlign: "center", padding: 14, fontSize: 12, color: "var(--ink-4)" }}>None uploaded</div>
             ) : (
-              <div className="space-y-1 max-h-48 overflow-y-auto">
-                {attachments.map((att) => (
-                  <label
-                    key={att.id}
-                    className={`flex items-center gap-2 px-2 py-2 rounded-lg cursor-pointer text-xs transition-colors ${
-                      selectedAttachments.has(att.id)
-                        ? "bg-[var(--color-accent-50)] border border-[var(--color-accent-200)]"
-                        : "hover:bg-[var(--color-warm-50)]"
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedAttachments.has(att.id)}
-                      onChange={() => toggleAttachment(att.id)}
-                      className="flex-shrink-0"
-                    />
-                    <svg className="w-4 h-4 text-red-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                      <path d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" />
-                    </svg>
-                    <span className="flex-1 truncate text-[var(--color-warm-700)] font-medium">{att.file_name}</span>
-                    <span className="text-[var(--color-warm-400)] flex-shrink-0">{(att.size_bytes / 1024).toFixed(0)} KB</span>
-                    <button
-                      type="button"
-                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDeleteAttachment(att.id); }}
-                      className="text-[var(--color-warm-300)] hover:text-red-500 transition-colors flex-shrink-0 ml-1"
-                      title="Remove"
-                    >
-                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
-                  </label>
-                ))}
+              <div style={{ display: "grid", gap: 4 }}>
+                {attachments.map((a) => {
+                  const on = attSel.has(a.id);
+                  return (
+                    <label key={a.id} style={{
+                      display: "flex", alignItems: "center", gap: 10,
+                      padding: "8px 10px", borderRadius: 6, cursor: "pointer",
+                      background: on ? "var(--paper-2)" : "transparent",
+                      border: on ? "1px solid var(--line-2)" : "1px solid transparent",
+                      transition: "all 120ms ease",
+                    }}>
+                      <input type="checkbox" className="ck" checked={on} onChange={() => toggleAtt(a.id)} />
+                      <span style={{ fontSize: 12.5, fontWeight: 500, color: "var(--ink)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {a.file_name}
+                      </span>
+                      <span className="mono" style={{ fontSize: 10.5, color: "var(--ink-4)" }}>{fmtKB(a.size_bytes)}</span>
+                      <button
+                        type="button"
+                        onClick={(e) => { e.preventDefault(); removeAtt(a.id); }}
+                        className="btn btn-ghost"
+                        style={{ padding: "2px 6px", fontSize: 12, color: "var(--ink-4)" }}
+                        title="Remove"
+                      >✕</button>
+                    </label>
+                  );
+                })}
               </div>
             )}
           </div>
+
+          {tmpl && previewContact && (
+            <div className="panel" style={{ padding: 0, overflow: "hidden" }}>
+              <div style={{
+                padding: "12px 16px", borderBottom: "1px solid var(--line)",
+                display: "flex", justifyContent: "space-between", alignItems: "center",
+                background: "var(--paper-2)",
+              }}>
+                <span className="eyebrow">Preview — as {previewContact.name.split(" ")[0]}</span>
+                <span className="mono" style={{ fontSize: 10, color: "var(--ink-4)" }}>1 / {sel.size}</span>
+              </div>
+              <div style={{ padding: 16, fontSize: 12.5 }}>
+                <div style={{ fontWeight: 500, marginBottom: 6, color: "var(--ink)" }}>{renderedSubject}</div>
+                <div className="mono" style={{ fontSize: 11, color: "var(--ink-4)", marginBottom: 10 }}>
+                  To: {previewContact.email}
+                </div>
+                <div className="editor" style={{ fontSize: 12, lineHeight: 1.6, color: "var(--ink-2)" }}>{renderedBody}</div>
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* ── Right column: Contacts ─────────────────── */}
-        <div className="lg:col-span-2">
-          <div className="bg-white border border-[var(--color-warm-200)] rounded-xl overflow-hidden">
-            {/* Header */}
-            <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-warm-200)] bg-[var(--color-warm-50)]">
-              <label className="flex items-center gap-2.5 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={allSelected}
-                  onChange={toggleAll}
-                  className="flex-shrink-0"
-                />
-                <span className="text-xs font-semibold text-[var(--color-warm-600)]">
-                  {allSelected ? "Deselect All" : "Select All"}
-                </span>
-              </label>
-              <span className="text-xs text-[var(--color-warm-400)]">
-                {selectedContacts.size} of {displayContacts.length} selected
+        {/* RIGHT — recipients */}
+        <div className="panel" style={{ overflow: "hidden", minWidth: 0 }}>
+          <div style={{
+            padding: "14px 18px", borderBottom: "1px solid var(--line)",
+            background: "var(--paper-2)", display: "flex", alignItems: "center", gap: 12,
+          }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}>
+              <input
+                type="checkbox"
+                className="ck"
+                checked={sel.size === filtered.length && filtered.length > 0}
+                onChange={toggleAll}
+              />
+              <span className="eyebrow" style={{ fontSize: 10 }}>
+                {sel.size === filtered.length && filtered.length > 0 ? "Deselect all" : "Select all"}
+              </span>
+            </label>
+            <div className="hairline-vert" style={{ height: 18 }} />
+            <input
+              className="field"
+              placeholder="Filter recipients…"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              style={{ flex: 1, maxWidth: 320, background: "var(--paper)", padding: "7px 10px" }}
+            />
+            <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10 }}>
+              <span className="mono" style={{ fontSize: 10.5, color: "var(--ink-4)", letterSpacing: "0.06em" }}>
+                {sel.size} / {filtered.length}
               </span>
             </div>
+          </div>
 
-            {/* List */}
-            <div className="max-h-[420px] overflow-y-auto divide-y divide-[var(--color-warm-100)]">
-              {displayContacts.length === 0 ? (
-                <div className="text-center py-12">
-                  <div className="w-10 h-10 rounded-full bg-[var(--color-warm-100)] flex items-center justify-center mx-auto mb-2">
-                    <svg className="w-5 h-5 text-[var(--color-warm-400)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
+          <div style={{ maxHeight: 520, overflowY: "auto" }}>
+            {filtered.length === 0 ? (
+              <div style={{ padding: 40, textAlign: "center", color: "var(--ink-4)", fontSize: 13 }}>
+                No recipients available
+              </div>
+            ) : filtered.map((c) => {
+              const on = sel.has(c.id);
+              return (
+                <label key={c.id} style={{
+                  display: "flex", alignItems: "center", gap: 14,
+                  padding: "12px 18px",
+                  borderTop: "1px solid var(--line)",
+                  cursor: "pointer",
+                  background: on ? "var(--paper-2)" : "var(--paper)",
+                  transition: "background 120ms ease",
+                }}>
+                  <input type="checkbox" className="ck" checked={on} onChange={() => toggle(c.id)} />
+                  <div className="avatar">{initials(c.name)}</div>
+                  <div style={{ flex: 1, minWidth: 0, lineHeight: 1.3 }}>
+                    <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                      <span style={{ fontWeight: 500, fontSize: 13.5, color: "var(--ink)" }}>{c.name}</span>
+                      {c.company && <span style={{ fontSize: 11.5, color: "var(--ink-4)" }}>· {c.company}</span>}
+                    </div>
+                    <span className="mono" style={{ fontSize: 11, color: "var(--ink-3)", letterSpacing: "0.02em" }}>{c.email}</span>
                   </div>
-                  <p className="text-sm text-[var(--color-warm-500)]">No contacts available</p>
-                  <p className="text-xs text-[var(--color-warm-400)] mt-1">Add contacts in the Contacts tab</p>
-                </div>
+                  {c.last_sent_at && (
+                    <span className="chip" title={`Last sent ${fmtAgo(c.last_sent_at)}`}>
+                      <span className="chip-dot" style={{ background: "var(--success)" }} />
+                      Sent {fmtAgo(c.last_sent_at)}
+                    </span>
+                  )}
+                  {on && (
+                    <span className="mono" style={{ fontSize: 10.5, color: "var(--ink)", letterSpacing: "0.06em" }}>✓</span>
+                  )}
+                </label>
+              );
+            })}
+          </div>
+
+          <div style={{
+            padding: "16px 18px", borderTop: "1px solid var(--line)",
+            background: "var(--paper-2)", display: "flex", alignItems: "center", justifyContent: "space-between",
+          }}>
+            <div style={{ fontSize: 12, color: "var(--ink-3)" }}>
+              {sel.size === 0 ? (
+                <>Select recipients to continue</>
               ) : (
-                displayContacts.map((contact) => {
-                  const isSelected = selectedContacts.has(contact.id);
-                  const initials = getInitials(contact.name);
-                  const colorIdx = contact.name.charCodeAt(0) % avatarColors.length;
-                  return (
-                    <label
-                      key={contact.id}
-                      className={`flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors ${
-                        isSelected ? "bg-[var(--color-accent-50)]" : "hover:bg-[var(--color-warm-50)]"
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={isSelected}
-                        onChange={() => toggleContact(contact.id)}
-                        className="flex-shrink-0"
-                      />
-                      <div className={`w-8 h-8 rounded-full bg-gradient-to-br ${avatarColors[colorIdx]} flex items-center justify-center text-white text-xs font-semibold flex-shrink-0 shadow-sm`}>
-                        {initials}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-baseline gap-2">
-                          <span className="text-sm font-medium text-[var(--color-warm-900)]">{contact.name}</span>
-                          {contact.company && (
-                            <span className="text-xs text-[var(--color-warm-400)] truncate">({contact.company})</span>
-                          )}
-                        </div>
-                        <span className="text-xs text-[var(--color-warm-500)]">{contact.email}</span>
-                      </div>
-                      {isSelected && (
-                        <div className="w-5 h-5 rounded-full bg-[var(--color-accent-500)] flex items-center justify-center flex-shrink-0">
-                          <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                          </svg>
-                        </div>
-                      )}
-                    </label>
-                  );
-                })
+                <>
+                  Sending <strong style={{ color: "var(--ink)" }}>{sel.size}</strong> email{sel.size !== 1 ? "s" : ""}
+                  {attSel.size > 0 && (
+                    <> · <strong style={{ color: "var(--ink)" }}>{attSel.size}</strong> attachment{attSel.size !== 1 ? "s" : ""}</>
+                  )}
+                  {tmpl && <> via <em style={{ fontFamily: "var(--font-display)", color: "var(--ink)" }}>{tmpl.name}</em></>}
+                </>
               )}
             </div>
+            <button
+              className="btn btn-primary"
+              disabled={!canSend}
+              onClick={() => setConfirmOpen(true)}
+              style={{ padding: "10px 18px" }}
+            >
+              {sending ? "Sending…" : (
+                <>
+                  Send {sel.size > 0 ? `to ${sel.size}` : "emails"}
+                  <span style={{ opacity: 0.6, marginLeft: 4 }}>→</span>
+                </>
+              )}
+            </button>
           </div>
         </div>
       </div>
 
-      {/* ── Send Button ──────────────────────────────── */}
-      <div className="mt-6 flex items-center justify-between border-t border-[var(--color-warm-200)] pt-5">
-        <div className="text-xs text-[var(--color-warm-400)]">
-          {selectedAttachments.size > 0 && (
-            <span className="flex items-center gap-1">
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-              </svg>
-              {selectedAttachments.size} PDF attachment{selectedAttachments.size !== 1 ? "s" : ""} included
-            </span>
-          )}
+      {confirmOpen && (
+        <div className="scrim" onClick={() => setConfirmOpen(false)}>
+          <div className="panel" onClick={(e) => e.stopPropagation()} style={{ width: "min(480px, 100%)", padding: 28 }}>
+            <div className="eyebrow">Confirm send</div>
+            <h3 style={{ fontFamily: "var(--font-display)", fontSize: 40, margin: "10px 0 14px", fontWeight: 400, lineHeight: 1 }}>
+              Send to <em>{sel.size}</em>?
+            </h3>
+            <p style={{ fontSize: 14, color: "var(--ink-3)", lineHeight: 1.55, marginTop: 0 }}>
+              Emails will be queued via Microsoft Graph immediately. Each contact's row will update with a timestamp.
+              {attSel.size > 0 && ` Includes ${attSel.size} PDF attachment${attSel.size !== 1 ? "s" : ""}.`}
+            </p>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 20 }}>
+              <button className="btn" onClick={() => setConfirmOpen(false)}>Cancel</button>
+              <button className="btn btn-primary" onClick={doSend}>Yes, send now</button>
+            </div>
+          </div>
         </div>
-
-        <button
-          onClick={handleSend}
-          disabled={!canSend}
-          className="btn-primary-polished px-6 py-2.5 disabled:opacity-55 disabled:cursor-not-allowed text-sm"
-        >
-          {sending ? (
-            <><Spinner className="h-4 w-4 border-white/30 border-t-white" />Sending…</>
-          ) : (
-            <>
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-              </svg>
-              {selectedContacts.size === 0
-                ? "Select Recipients"
-                : `Send to ${selectedContacts.size} Contact${selectedContacts.size !== 1 ? "s" : ""}${selectedAttachments.size > 0 ? ` + ${selectedAttachments.size} PDF${selectedAttachments.size !== 1 ? "s" : ""}` : ""}`
-              }
-            </>
-          )}
-        </button>
-      </div>
+      )}
     </div>
   );
 }

@@ -92,6 +92,34 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // Fetch sender info for {{sender}} / {{title}} variables.
+  // Try to read `title`; fall back if the column doesn't exist yet.
+  type SenderRow = { name?: string | null; email?: string | null; title?: string | null };
+  let senderRow: SenderRow | null = null;
+  {
+    const withTitle = await supabaseAdmin
+      .from("users")
+      .select("id, name, email, title")
+      .eq("id", session.userId)
+      .maybeSingle();
+    if (withTitle.error) {
+      const fallback = await supabaseAdmin
+        .from("users")
+        .select("id, name, email")
+        .eq("id", session.userId)
+        .maybeSingle();
+      senderRow = (fallback.data as unknown) as SenderRow | null;
+    } else {
+      senderRow = (withTitle.data as unknown) as SenderRow | null;
+    }
+  }
+
+  const senderCtx = {
+    name: senderRow?.name || "",
+    email: senderRow?.email || "",
+    title: senderRow?.title || "",
+  };
+
   // Get HTML body from template
   let templateHtml: string;
   const typedTemplate = template as Template;
@@ -124,12 +152,14 @@ export async function POST(req: NextRequest) {
       const personalizedSubject = substituteVariables(
         typedTemplate.subject,
         contact,
-        false
+        false,
+        senderCtx
       );
       const personalizedBody = substituteVariables(
         templateHtml,
         contact,
-        true
+        true,
+        senderCtx
       );
 
       const result = await sendMail({
