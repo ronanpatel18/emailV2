@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import type { Contact, Template, User, Attachment } from "@/types";
 import { Spinner } from "./Spinner";
 import { useToast } from "./Toast";
-import { SectionHead, Step, TemplateLine, initials, fmtAgo, fmtKB, useReveal } from "./wsbc-ui";
+import { SectionHead, Step, TemplateLine, initials, fmtAgo, fmtKB } from "./wsbc-ui";
 import { substituteVariables } from "@/lib/template-utils";
 import { useSession } from "next-auth/react";
 
@@ -31,8 +31,6 @@ export function SendEmailsTab({ users, selectedUserId, onChangeUserId }: SendEma
   const { showToast, ToastComponent } = useToast();
   const hasFetched = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  useReveal(contacts.length);
 
   const fetchData = useCallback(async () => {
     try {
@@ -170,32 +168,17 @@ export function SendEmailsTab({ users, selectedUserId, onChangeUserId }: SendEma
     <div>
       {ToastComponent}
 
-      <SectionHead
-        no="§ 03"
-        eyebrow="Dispatch"
-        title="Send"
-        right={
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span className="eyebrow" style={{ fontSize: 10 }}>View</span>
-            <select className="field" value={selectedUserId} onChange={(e) => onChangeUserId(e.target.value)} style={{ width: "auto", minWidth: 160 }}>
-              <option value="">Master</option>
-              {users.map((u) => <option key={u.id} value={u.id}>{u.name || u.email}</option>)}
-            </select>
-          </div>
-        }
-      />
+      <SectionHead no="§ 03" eyebrow="Dispatch" title="Send" />
 
       {/* stepper */}
       <div
-        className="reveal"
         style={{
           display: "grid",
           gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-          gap: 0,
           border: "1px solid var(--line)",
           borderRadius: "var(--radius-lg)",
           overflow: "hidden",
-          marginBottom: 20,
+          marginBottom: 24,
         }}
       >
         <Step n="01" label="Template" value={tmpl ? tmpl.name : "Not selected"} done={!!tmpl} />
@@ -203,46 +186,170 @@ export function SendEmailsTab({ users, selectedUserId, onChangeUserId }: SendEma
         <Step n="03" label="Attachments" value={attSel.size > 0 ? `${attSel.size} PDFs` : "None"} done={attSel.size > 0} optional />
       </div>
 
-      {/* workspace */}
+      {/* ── TWO-COLUMN WORKSPACE ─────────────────────────── */}
       <div
-        className="reveal"
         style={{
           display: "grid",
-          gridTemplateColumns: "minmax(300px, 360px) minmax(0, 1fr)",
+          gridTemplateColumns: "minmax(0, 1fr) 340px",
           gap: 20,
           alignItems: "start",
         }}
       >
-        {/* LEFT */}
-        <div style={{ display: "grid", gap: 20, alignContent: "start", minWidth: 0 }}>
-          <div className="panel" style={{ padding: 18 }}>
-            <div className="eyebrow" style={{ marginBottom: 10 }}>Template</div>
-            <select className="field" value={templateId} onChange={(e) => setTemplateId(e.target.value)}>
-              <option value="">Choose a template…</option>
-              {templates.map((t) => (
-                <option key={t.id} value={t.id}>{t.name} · {t.type.toUpperCase()}</option>
-              ))}
-            </select>
-            {tmpl && (
-              <div style={{ marginTop: 12, padding: 12, background: "var(--paper-2)", borderRadius: "var(--radius)", border: "1px solid var(--line)" }}>
-                <div className="eyebrow" style={{ fontSize: 10 }}>Subject</div>
-                <div style={{ fontSize: 13, marginTop: 4, color: "var(--ink-2)" }}>
-                  <TemplateLine text={tmpl.subject} />
+        {/* ── LEFT: Template + Recipients stacked ── */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 16, minWidth: 0 }}>
+
+          {/* Template bar */}
+          <div className="panel" style={{ padding: "16px 18px" }}>
+            <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
+              <div style={{ flex: "0 0 260px" }}>
+                <div className="eyebrow" style={{ fontSize: 10, marginBottom: 6 }}>Template</div>
+                <select
+                  className="field"
+                  value={templateId}
+                  onChange={(e) => setTemplateId(e.target.value)}
+                >
+                  <option value="">Choose a template…</option>
+                  {templates.map((t) => (
+                    <option key={t.id} value={t.id}>{t.name} · {t.type.toUpperCase()}</option>
+                  ))}
+                </select>
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div className="eyebrow" style={{ fontSize: 10, marginBottom: 6 }}>Subject</div>
+                <div style={{
+                  fontSize: 13.5,
+                  color: tmpl ? "var(--ink)" : "var(--ink-4)",
+                  fontStyle: tmpl ? "normal" : "italic",
+                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                }}>
+                  {tmpl ? <TemplateLine text={tmpl.subject} /> : "No template selected"}
                 </div>
               </div>
-            )}
+            </div>
           </div>
 
+          {/* Recipients panel */}
+          <div className="panel" style={{ overflow: "hidden" }}>
+            {/* header */}
+            <div style={{
+              padding: "12px 16px",
+              borderBottom: "1px solid var(--line)",
+              background: "var(--paper-2)",
+              display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap",
+            }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", flexShrink: 0 }}>
+                <input
+                  type="checkbox"
+                  className="ck"
+                  checked={sel.size === filtered.length && filtered.length > 0}
+                  onChange={toggleAll}
+                />
+                <span className="eyebrow" style={{ fontSize: 10 }}>
+                  {sel.size === filtered.length && filtered.length > 0 ? "Deselect all" : "Select all"}
+                </span>
+              </label>
+              <div className="hairline-vert" style={{ height: 18 }} />
+              <input
+                className="field"
+                placeholder="Filter recipients…"
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                style={{ flex: 1, minWidth: 140, background: "var(--paper)", padding: "6px 10px" }}
+              />
+              <div className="hairline-vert" style={{ height: 18 }} />
+              {/* VIEW dropdown — moved here from section header */}
+              <select
+                className="field"
+                value={selectedUserId}
+                onChange={(e) => onChangeUserId(e.target.value)}
+                style={{ width: "auto", minWidth: 130, padding: "6px 10px" }}
+                title="View contacts for…"
+              >
+                <option value="">All contacts</option>
+                {users.map((u) => <option key={u.id} value={u.id}>{u.name || u.email}</option>)}
+              </select>
+              <span className="mono" style={{ fontSize: 10.5, color: "var(--ink-4)", letterSpacing: "0.06em", flexShrink: 0 }}>
+                {sel.size} / {filtered.length}
+              </span>
+            </div>
+
+            {/* rows */}
+            <div style={{ maxHeight: 480, overflowY: "auto" }}>
+              {filtered.length === 0 ? (
+                <div style={{ padding: 40, textAlign: "center", color: "var(--ink-4)", fontSize: 13 }}>
+                  No recipients available
+                </div>
+              ) : filtered.map((c) => {
+                const on = sel.has(c.id);
+                return (
+                  <label key={c.id} style={{
+                    display: "flex", alignItems: "center", gap: 14,
+                    padding: "11px 16px",
+                    borderTop: "1px solid var(--line)",
+                    cursor: "pointer",
+                    background: on ? "var(--paper-2)" : "var(--paper)",
+                    transition: "background 120ms ease",
+                  }}>
+                    <input type="checkbox" className="ck" checked={on} onChange={() => toggle(c.id)} />
+                    <div className="avatar">{initials(c.name)}</div>
+                    <div style={{ flex: 1, minWidth: 0, lineHeight: 1.3 }}>
+                      <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
+                        <span style={{ fontWeight: 500, fontSize: 13.5, color: "var(--ink)" }}>{c.name}</span>
+                        {c.company && <span style={{ fontSize: 11.5, color: "var(--ink-4)" }}>· {c.company}</span>}
+                      </div>
+                      <span className="mono" style={{ fontSize: 11, color: "var(--ink-3)", letterSpacing: "0.02em" }}>{c.email}</span>
+                    </div>
+                    {c.last_sent_at && (
+                      <span className="chip" title={`Last sent ${fmtAgo(c.last_sent_at)}`}>
+                        <span className="chip-dot" style={{ background: "var(--success)" }} />
+                        Sent {fmtAgo(c.last_sent_at)}
+                      </span>
+                    )}
+                    {on && <span className="mono" style={{ fontSize: 10.5, color: "var(--ink)", letterSpacing: "0.06em" }}>✓</span>}
+                  </label>
+                );
+              })}
+            </div>
+
+            {/* send footer */}
+            <div style={{
+              padding: "14px 16px", borderTop: "1px solid var(--line)",
+              background: "var(--paper-2)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
+            }}>
+              <div style={{ fontSize: 12, color: "var(--ink-3)", minWidth: 0 }}>
+                {sel.size === 0 ? (
+                  <>Select recipients to continue</>
+                ) : (
+                  <>
+                    Sending <strong style={{ color: "var(--ink)" }}>{sel.size}</strong> email{sel.size !== 1 ? "s" : ""}
+                    {attSel.size > 0 && <> · <strong style={{ color: "var(--ink)" }}>{attSel.size}</strong> attachment{attSel.size !== 1 ? "s" : ""}</>}
+                    {tmpl && <> via <em style={{ fontFamily: "var(--font-display)", color: "var(--ink)" }}>{tmpl.name}</em></>}
+                  </>
+                )}
+              </div>
+              <button
+                className="btn btn-primary"
+                disabled={!canSend}
+                onClick={() => setConfirmOpen(true)}
+                style={{ padding: "10px 18px", flexShrink: 0 }}
+              >
+                {sending ? "Sending…" : <>Send {sel.size > 0 ? `to ${sel.size}` : "emails"} <span style={{ opacity: 0.6 }}>→</span></>}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* ── RIGHT: PDF Attachments + Preview stacked, top-aligned with Template bar ── */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 16, minWidth: 0 }}>
+
+          {/* PDF Attachments */}
           <div className="panel" style={{ padding: 18 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
               <span className="eyebrow">PDF Attachments</span>
-              <span className="mono" style={{ fontSize: 10.5, color: "var(--ink-4)" }}>
-                {attSel.size}/{attachments.length}
-              </span>
+              <span className="mono" style={{ fontSize: 10.5, color: "var(--ink-4)" }}>{attSel.size}/{attachments.length}</span>
             </div>
             <button
-              type="button"
-              className="btn"
+              type="button" className="btn"
               onClick={() => fileInputRef.current?.click()}
               disabled={uploading}
               style={{ width: "100%", justifyContent: "center", marginBottom: 10 }}
@@ -254,31 +361,26 @@ export function SendEmailsTab({ users, selectedUserId, onChangeUserId }: SendEma
             </button>
             <input ref={fileInputRef} type="file" accept=".pdf" multiple style={{ display: "none" }} onChange={handleUploadPDFs} />
             {attachments.length === 0 ? (
-              <div style={{ textAlign: "center", padding: 14, fontSize: 12, color: "var(--ink-4)" }}>None uploaded</div>
+              <div style={{ textAlign: "center", padding: "12px 0", fontSize: 12, color: "var(--ink-4)" }}>None uploaded</div>
             ) : (
-              <div style={{ display: "grid", gap: 4 }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 4, maxHeight: 200, overflowY: "auto" }}>
                 {attachments.map((a) => {
                   const on = attSel.has(a.id);
                   return (
                     <label key={a.id} style={{
-                      display: "flex", alignItems: "center", gap: 10,
-                      padding: "8px 10px", borderRadius: 6, cursor: "pointer",
+                      display: "flex", alignItems: "center", gap: 8,
+                      padding: "7px 9px", borderRadius: 6, cursor: "pointer",
                       background: on ? "var(--paper-2)" : "transparent",
                       border: on ? "1px solid var(--line-2)" : "1px solid transparent",
                       transition: "all 120ms ease",
                     }}>
                       <input type="checkbox" className="ck" checked={on} onChange={() => toggleAtt(a.id)} />
-                      <span style={{ fontSize: 12.5, fontWeight: 500, color: "var(--ink)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      <span style={{ fontSize: 12, fontWeight: 500, color: "var(--ink)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                         {a.file_name}
                       </span>
-                      <span className="mono" style={{ fontSize: 10.5, color: "var(--ink-4)" }}>{fmtKB(a.size_bytes)}</span>
-                      <button
-                        type="button"
-                        onClick={(e) => { e.preventDefault(); removeAtt(a.id); }}
-                        className="btn btn-ghost"
-                        style={{ padding: "2px 6px", fontSize: 12, color: "var(--ink-4)" }}
-                        title="Remove"
-                      >✕</button>
+                      <span className="mono" style={{ fontSize: 10, color: "var(--ink-4)" }}>{fmtKB(a.size_bytes)}</span>
+                      <button type="button" onClick={(e) => { e.preventDefault(); removeAtt(a.id); }}
+                        className="btn btn-ghost" style={{ padding: "2px 5px", fontSize: 11, color: "var(--ink-4)" }} title="Remove">✕</button>
                     </label>
                   );
                 })}
@@ -286,128 +388,31 @@ export function SendEmailsTab({ users, selectedUserId, onChangeUserId }: SendEma
             )}
           </div>
 
-          {tmpl && previewContact && (
-            <div className="panel" style={{ padding: 0, overflow: "hidden" }}>
-              <div style={{
-                padding: "12px 16px", borderBottom: "1px solid var(--line)",
-                display: "flex", justifyContent: "space-between", alignItems: "center",
-                background: "var(--paper-2)",
-              }}>
-                <span className="eyebrow">Preview — as {previewContact.name.split(" ")[0]}</span>
-                <span className="mono" style={{ fontSize: 10, color: "var(--ink-4)" }}>1 / {sel.size}</span>
-              </div>
-              <div style={{ padding: 16, fontSize: 12.5 }}>
-                <div style={{ fontWeight: 500, marginBottom: 6, color: "var(--ink)" }}>{renderedSubject}</div>
-                <div className="mono" style={{ fontSize: 11, color: "var(--ink-4)", marginBottom: 10 }}>
+          {/* Preview */}
+          <div className="panel" style={{ overflow: "hidden" }}>
+            <div style={{
+              padding: "12px 16px", borderBottom: "1px solid var(--line)",
+              display: "flex", justifyContent: "space-between", alignItems: "center",
+              background: "var(--paper-2)",
+            }}>
+              <span className="eyebrow" style={{ fontSize: 10 }}>
+                {previewContact ? `Preview — ${previewContact.name.split(" ")[0]}` : "Preview"}
+              </span>
+              {previewContact && <span className="mono" style={{ fontSize: 10, color: "var(--ink-4)" }}>1 / {sel.size}</span>}
+            </div>
+            {tmpl && previewContact ? (
+              <div style={{ padding: 16, maxHeight: 320, overflowY: "auto" }}>
+                <div style={{ fontWeight: 500, marginBottom: 6, color: "var(--ink)", fontSize: 13 }}>{renderedSubject}</div>
+                <div className="mono" style={{ fontSize: 10.5, color: "var(--ink-4)", marginBottom: 10, wordBreak: "break-all" }}>
                   To: {previewContact.email}
                 </div>
                 <div className="editor" style={{ fontSize: 12, lineHeight: 1.6, color: "var(--ink-2)" }}>{renderedBody}</div>
               </div>
-            </div>
-          )}
-        </div>
-
-        {/* RIGHT — recipients */}
-        <div className="panel" style={{ overflow: "hidden", minWidth: 0 }}>
-          <div style={{
-            padding: "14px 18px", borderBottom: "1px solid var(--line)",
-            background: "var(--paper-2)", display: "flex", alignItems: "center", gap: 12,
-          }}>
-            <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}>
-              <input
-                type="checkbox"
-                className="ck"
-                checked={sel.size === filtered.length && filtered.length > 0}
-                onChange={toggleAll}
-              />
-              <span className="eyebrow" style={{ fontSize: 10 }}>
-                {sel.size === filtered.length && filtered.length > 0 ? "Deselect all" : "Select all"}
-              </span>
-            </label>
-            <div className="hairline-vert" style={{ height: 18 }} />
-            <input
-              className="field"
-              placeholder="Filter recipients…"
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              style={{ flex: 1, maxWidth: 320, background: "var(--paper)", padding: "7px 10px" }}
-            />
-            <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10 }}>
-              <span className="mono" style={{ fontSize: 10.5, color: "var(--ink-4)", letterSpacing: "0.06em" }}>
-                {sel.size} / {filtered.length}
-              </span>
-            </div>
-          </div>
-
-          <div style={{ maxHeight: 520, overflowY: "auto" }}>
-            {filtered.length === 0 ? (
-              <div style={{ padding: 40, textAlign: "center", color: "var(--ink-4)", fontSize: 13 }}>
-                No recipients available
+            ) : (
+              <div style={{ padding: "20px 16px", fontSize: 12.5, color: "var(--ink-4)", lineHeight: 1.55 }}>
+                {!tmpl ? "Pick a template above to preview." : "Select a recipient to preview the personalized email."}
               </div>
-            ) : filtered.map((c) => {
-              const on = sel.has(c.id);
-              return (
-                <label key={c.id} style={{
-                  display: "flex", alignItems: "center", gap: 14,
-                  padding: "12px 18px",
-                  borderTop: "1px solid var(--line)",
-                  cursor: "pointer",
-                  background: on ? "var(--paper-2)" : "var(--paper)",
-                  transition: "background 120ms ease",
-                }}>
-                  <input type="checkbox" className="ck" checked={on} onChange={() => toggle(c.id)} />
-                  <div className="avatar">{initials(c.name)}</div>
-                  <div style={{ flex: 1, minWidth: 0, lineHeight: 1.3 }}>
-                    <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-                      <span style={{ fontWeight: 500, fontSize: 13.5, color: "var(--ink)" }}>{c.name}</span>
-                      {c.company && <span style={{ fontSize: 11.5, color: "var(--ink-4)" }}>· {c.company}</span>}
-                    </div>
-                    <span className="mono" style={{ fontSize: 11, color: "var(--ink-3)", letterSpacing: "0.02em" }}>{c.email}</span>
-                  </div>
-                  {c.last_sent_at && (
-                    <span className="chip" title={`Last sent ${fmtAgo(c.last_sent_at)}`}>
-                      <span className="chip-dot" style={{ background: "var(--success)" }} />
-                      Sent {fmtAgo(c.last_sent_at)}
-                    </span>
-                  )}
-                  {on && (
-                    <span className="mono" style={{ fontSize: 10.5, color: "var(--ink)", letterSpacing: "0.06em" }}>✓</span>
-                  )}
-                </label>
-              );
-            })}
-          </div>
-
-          <div style={{
-            padding: "16px 18px", borderTop: "1px solid var(--line)",
-            background: "var(--paper-2)", display: "flex", alignItems: "center", justifyContent: "space-between",
-          }}>
-            <div style={{ fontSize: 12, color: "var(--ink-3)" }}>
-              {sel.size === 0 ? (
-                <>Select recipients to continue</>
-              ) : (
-                <>
-                  Sending <strong style={{ color: "var(--ink)" }}>{sel.size}</strong> email{sel.size !== 1 ? "s" : ""}
-                  {attSel.size > 0 && (
-                    <> · <strong style={{ color: "var(--ink)" }}>{attSel.size}</strong> attachment{attSel.size !== 1 ? "s" : ""}</>
-                  )}
-                  {tmpl && <> via <em style={{ fontFamily: "var(--font-display)", color: "var(--ink)" }}>{tmpl.name}</em></>}
-                </>
-              )}
-            </div>
-            <button
-              className="btn btn-primary"
-              disabled={!canSend}
-              onClick={() => setConfirmOpen(true)}
-              style={{ padding: "10px 18px" }}
-            >
-              {sending ? "Sending…" : (
-                <>
-                  Send {sel.size > 0 ? `to ${sel.size}` : "emails"}
-                  <span style={{ opacity: 0.6, marginLeft: 4 }}>→</span>
-                </>
-              )}
-            </button>
+            )}
           </div>
         </div>
       </div>

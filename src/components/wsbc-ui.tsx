@@ -75,11 +75,10 @@ export function SectionHead({
       }}
     >
       <div>
-        <div className="eyebrow reveal">
+        <div className="eyebrow">
           <span style={{ color: "var(--ink-4)" }}>{no}</span> —— {eyebrow}
         </div>
         <h2
-          className="reveal"
           style={{
             fontFamily: "var(--font-display)",
             fontSize: "clamp(36px, 5vw, 68px)",
@@ -93,14 +92,13 @@ export function SectionHead({
         </h2>
         {desc && (
           <p
-            className="reveal"
             style={{ fontSize: 14, color: "var(--ink-3)", maxWidth: 560, margin: 0, lineHeight: 1.55 }}
           >
             {desc}
           </p>
         )}
       </div>
-      {right && <div className="reveal">{right}</div>}
+      {right && <div>{right}</div>}
     </div>
   );
 }

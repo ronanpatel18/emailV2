@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import type { Template } from "@/types";
 import { Spinner } from "./Spinner";
 import { useToast } from "./Toast";
-import { SectionHead, TemplateLine, Labeled, useReveal } from "./wsbc-ui";
+import { SectionHead, TemplateLine, Labeled } from "./wsbc-ui";
 
 export function TemplatesTab() {
   const [templates, setTemplates] = useState<Template[]>([]);
@@ -18,8 +18,6 @@ export function TemplatesTab() {
   const [selected, setSelected] = useState<string | null>(null);
   const { showToast, ToastComponent } = useToast();
   const hasFetched = useRef(false);
-
-  useReveal(templates.length);
 
   const fetchTemplates = useCallback(async () => {
     try {
@@ -102,10 +100,6 @@ export function TemplatesTab() {
     finally { setUploading(false); e.target.value = ""; }
   };
 
-  if (loading) {
-    return <div style={{ display: "flex", justifyContent: "center", padding: "80px 0" }}><Spinner /></div>;
-  }
-
   return (
     <div>
       {ToastComponent}
@@ -132,9 +126,12 @@ export function TemplatesTab() {
         }
       />
 
+      {loading ? (
+        <div style={{ display: "flex", justifyContent: "center", padding: "60px 0" }}><Spinner /></div>
+      ) : <>
+
       {/* Variable banner */}
       <div
-        className="reveal"
         style={{
           display: "flex",
           alignItems: "center",
@@ -164,7 +161,7 @@ export function TemplatesTab() {
       </div>
 
       {/* Split: list + preview */}
-      <div className="reveal" style={{ display: "grid", gridTemplateColumns: "380px 1fr", gap: 20 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "380px 1fr", gap: 20 }}>
         <div className="panel" style={{ padding: 0, overflow: "hidden" }}>
           <div className="row head" style={{
             display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 16px",
@@ -369,6 +366,7 @@ export function TemplatesTab() {
           </div>
         </div>
       )}
+      </>}
     </div>
   );
 }

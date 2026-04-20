@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef, useMemo, startTransition } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import type { Contact, User } from "@/types";
 import { Spinner } from "./Spinner";
 import { useToast } from "./Toast";
-import { SectionHead, MetricTile, Labeled, initials, fmtAgo, useReveal } from "./wsbc-ui";
+import { SectionHead, MetricTile, Labeled, initials, fmtAgo } from "./wsbc-ui";
 
 interface ContactsTabProps {
   users: User[];
@@ -25,27 +25,9 @@ export function ContactsTab({ users, selectedUserId, onChangeUserId }: ContactsT
   const [q, setQ] = useState("");
   const { showToast, ToastComponent } = useToast();
   const hasFetched = useRef(false);
-  const syncIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  useReveal(contacts.length);
 
   const mergeContacts = useCallback((incoming: Contact[]) => {
-    startTransition(() => {
-      setContacts((prev) => {
-        if (prev.length !== incoming.length) return incoming;
-        for (let i = 0; i < incoming.length; i++) {
-          const p = prev[i], n = incoming[i];
-          if (
-            p.id !== n.id || p.name !== n.name || p.email !== n.email ||
-            p.company !== n.company || p.assigned_to !== n.assigned_to ||
-            p.last_sent_at !== n.last_sent_at ||
-            p.last_sent_by_name !== n.last_sent_by_name ||
-            p.assigned_to_name !== n.assigned_to_name
-          ) return incoming;
-        }
-        return prev;
-      });
-    });
+    setContacts(incoming);
   }, []);
 
   const fetchContacts = useCallback(async (isInitial = false) => {
@@ -56,31 +38,28 @@ export function ContactsTab({ users, selectedUserId, onChangeUserId }: ContactsT
     finally { if (isInitial) setLoading(false); }
   }, [mergeContacts]);
 
-  const backgroundSync = useCallback(async () => {
-    try {
-      await fetch("/api/sync/sheets", { method: "POST" });
-      await fetchContacts(false);
-    } catch { /* ignore */ }
-  }, [fetchContacts]);
-
   useEffect(() => {
     if (hasFetched.current) return;
     hasFetched.current = true;
-    fetchContacts(true);
-    fetch("/api/sync/sheets").then((r) => r.ok ? r.json() : null).then((d) => { if (d?.url) setSheetUrl(d.url); }).catch(() => {});
-    // Refresh only when the tab becomes visible again — no tight polling
-    // (the old 10s interval caused the UI to flash on every fetch).
-    const onVisible = () => {
-      if (document.visibilityState === "visible") fetchContacts(false);
-    };
-    document.addEventListener("visibilitychange", onVisible);
-    // Background sheet-sync at a calm cadence (every 2 minutes).
-    syncIntervalRef.current = setInterval(backgroundSync, 120000);
-    return () => {
-      document.removeEventListener("visibilitychange", onVisible);
-      if (syncIntervalRef.current) clearInterval(syncIntervalRef.current);
-    };
-  }, [fetchContacts, backgroundSync]);
+
+    // On every fresh mount of this tab (i.e. whenever the user clicks back
+    // onto Contacts), pull latest rows from the Google Sheet into Supabase,
+    // then refetch contacts. Fetch the sheet URL in parallel. No background
+    // polling — it only happens on mount.
+    (async () => {
+      try {
+        const [sheetRes] = await Promise.allSettled([
+          fetch("/api/sync/sheets", { method: "POST" }),
+          fetch("/api/sync/sheets")
+            .then((r) => (r.ok ? r.json() : null))
+            .then((d) => { if (d?.url) setSheetUrl(d.url); }),
+        ]);
+        // If the POST sync failed, we still just show whatever Supabase has.
+        void sheetRes;
+      } catch { /* ignore */ }
+      await fetchContacts(true);
+    })();
+  }, [fetchContacts]);
 
   const hasPersonal = selectedUserId ? contacts.some((c) => c.assigned_to === selectedUserId) : false;
   const display = selectedUserId && hasPersonal ? contacts.filter((c) => c.assigned_to === selectedUserId) : contacts;
@@ -153,10 +132,6 @@ export function ContactsTab({ users, selectedUserId, onChangeUserId }: ContactsT
     finally { setSyncing(false); }
   };
 
-  if (loading) {
-    return <div style={{ display: "flex", justifyContent: "center", padding: "80px 0" }}><Spinner /></div>;
-  }
-
   return (
     <div>
       {ToastComponent}
@@ -191,9 +166,12 @@ export function ContactsTab({ users, selectedUserId, onChangeUserId }: ContactsT
         }
       />
 
+      {loading ? (
+        <div style={{ display: "flex", justifyContent: "center", padding: "60px 0" }}><Spinner /></div>
+      ) : <>
+
       {/* metrics */}
       <div
-        className="reveal"
         style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 28 }}
       >
         <MetricTile label="Total contacts" value={stats.total} trend="Directory" sparkSeed={1} />
@@ -210,7 +188,6 @@ export function ContactsTab({ users, selectedUserId, onChangeUserId }: ContactsT
 
       {/* toolbar */}
       <div
-        className="reveal"
         style={{
           display: "flex",
           alignItems: "center",
@@ -256,7 +233,7 @@ export function ContactsTab({ users, selectedUserId, onChangeUserId }: ContactsT
       </div>
 
       {/* table */}
-      <div className="reveal panel" style={{ overflow: "hidden" }}>
+      <div className="panel" style={{ overflow: "hidden" }}>
         <div className="rowgrid row head">
           <div style={{ padding: "0 14px" }}>Name</div>
           <div style={{ padding: "0 14px" }}>Email</div>
@@ -325,6 +302,8 @@ export function ContactsTab({ users, selectedUserId, onChangeUserId }: ContactsT
       <div className="mono" style={{ fontSize: 10.5, color: "var(--ink-4)", marginTop: 10, letterSpacing: "0.06em" }}>
         TIMES SHOWN IN CENTRAL — CT (CHICAGO)
       </div>
+
+      </>}
 
       {showForm && (
         <div className="scrim" onClick={resetForm}>
