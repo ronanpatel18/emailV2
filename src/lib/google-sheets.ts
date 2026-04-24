@@ -29,6 +29,7 @@ const PERSON_HEADERS = [
 // Columns 0-3 are editable on master (Name, Email, Company, Assigned To); rest read-only
 const MASTER_EDITABLE_COL_COUNT = 4;
 const MASTER_SHEET_NAME = "Master";
+const MEMBERS_SHEET_NAME = "WSBC Members";
 
 function getAuth() {
   const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
@@ -237,6 +238,83 @@ async function writeHeadersAndFormat(
 }
 
 /**
+ * Read the "WSBC Members" tab. Expects columns: Name | Email | Title
+ * (header row required). Returns an empty list if the tab doesn't exist.
+ */
+export async function readWsbcMembers(): Promise<
+  Array<{ name: string; email: string; title: string | null }>
+> {
+  const sheets = getSheetsClient();
+  const spreadsheetId = getSheetId();
+
+  const existing = await getExistingSheets(sheets, spreadsheetId);
+  if (!existing.has(MEMBERS_SHEET_NAME)) return [];
+
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: `'${MEMBERS_SHEET_NAME}'!A2:C`,
+  });
+
+  const rows = res.data.values || [];
+  const out: Array<{ name: string; email: string; title: string | null }> = [];
+  for (const row of rows) {
+    const name = (row[0] || "").toString().trim();
+    const email = (row[1] || "").toString().trim().toLowerCase();
+    if (!email) continue;
+    const title = (row[2] || "").toString().trim() || null;
+    out.push({ name, email, title });
+  }
+  return out;
+}
+
+/**
+ * Sync the "WSBC Members" tab into the Supabase users table.
+ * - Upserts users by email (inserts missing members with name + title).
+ * - Updates title for existing users where the sheet differs.
+ * This is how titles auto-populate and how new members appear in the
+ * "Assigned to" dropdown before their first login.
+ */
+export async function syncWsbcMembersToUsers(): Promise<void> {
+  const members = await readWsbcMembers();
+  if (members.length === 0) return;
+
+  const emails = members.map((m) => m.email);
+  const { data: existing } = await supabaseAdmin
+    .from("users")
+    .select("id, email, name, title")
+    .in("email", emails);
+
+  const byEmail = new Map<
+    string,
+    { id: string; name: string | null; title: string | null }
+  >();
+  for (const u of existing || []) {
+    byEmail.set(u.email.toLowerCase(), {
+      id: u.id,
+      name: u.name,
+      title: u.title ?? null,
+    });
+  }
+
+  for (const m of members) {
+    const found = byEmail.get(m.email);
+    if (found) {
+      const nextName = found.name || m.name || null;
+      if ((found.title ?? null) !== m.title || found.name !== nextName) {
+        await supabaseAdmin
+          .from("users")
+          .update({ title: m.title, name: nextName })
+          .eq("id", found.id);
+      }
+    } else {
+      await supabaseAdmin
+        .from("users")
+        .insert({ email: m.email, name: m.name || m.email.split("@")[0], title: m.title });
+    }
+  }
+}
+
+/**
  * Fetch all users from Supabase.
  */
 async function getAllUsers(): Promise<Map<string, { id: string; name: string }>> {
@@ -420,6 +498,14 @@ export async function pullContactsFromSheet(
   const spreadsheetId = getSheetId();
 
   await ensureMasterSheet(sheets, spreadsheetId);
+
+  // Pull members + titles from "WSBC Members" tab → users table first,
+  // so that assigned_to lookups resolve correctly on this same sync.
+  try {
+    await syncWsbcMembersToUsers();
+  } catch (err) {
+    console.error("Failed to sync WSBC Members sheet:", err);
+  }
 
   // Read all data rows from Master (skip header) — editable columns: Name, Email, Company, Assigned To
   const res = await sheets.spreadsheets.values.get({

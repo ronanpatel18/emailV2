@@ -2,6 +2,7 @@ export interface User {
   id: string;
   email: string;
   name: string | null;
+  title?: string | null;
   created_at: string;
 }
 
@@ -18,6 +19,7 @@ export interface Contact {
   last_subject?: string | null;
   last_sent_by_name?: string | null;
   assigned_to_name?: string | null;
+  assigned_to_title?: string | null;
 }
 
 export interface Template {

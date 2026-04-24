@@ -19,15 +19,17 @@ export async function GET() {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  // Get all users for name resolution
+  // Get all users for name + title resolution
   const { data: allUsers } = await supabaseAdmin
     .from("users")
-    .select("id, name");
+    .select("id, name, title");
 
   const userIdToName = new Map<string, string>();
+  const userIdToTitle = new Map<string, string>();
   if (allUsers) {
     for (const u of allUsers) {
       if (u.name) userIdToName.set(u.id, u.name);
+      if (u.title) userIdToTitle.set(u.id, u.title);
     }
   }
 
@@ -64,6 +66,9 @@ export async function GET() {
     last_sent_by_name: lastSentMap.get(c.id)?.sent_by_name || null,
     assigned_to_name: c.assigned_to
       ? userIdToName.get(c.assigned_to) || null
+      : null,
+    assigned_to_title: c.assigned_to
+      ? userIdToTitle.get(c.assigned_to) || null
       : null,
   }));
 

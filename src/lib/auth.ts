@@ -1,6 +1,7 @@
 import NextAuth from "next-auth";
 import MicrosoftEntraID from "next-auth/providers/microsoft-entra-id";
 import { supabaseAdmin } from "./supabase";
+import { readWsbcMembers } from "./google-sheets";
 
 declare module "next-auth" {
   interface Session {
@@ -64,8 +65,27 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
           let userId: string | undefined;
 
+          // Look up this user's title from the "WSBC Members" sheet so we
+          // can populate it on insert/update. Failures are non-fatal.
+          let memberTitle: string | null = null;
+          try {
+            const members = await readWsbcMembers();
+            const match = members.find(
+              (m) => m.email.toLowerCase() === email.toLowerCase()
+            );
+            if (match) memberTitle = match.title;
+          } catch (err) {
+            console.error("readWsbcMembers failed during sign-in:", err);
+          }
+
           if (existingUser) {
             userId = existingUser.id;
+            if (memberTitle !== null) {
+              await supabaseAdmin
+                .from("users")
+                .update({ title: memberTitle })
+                .eq("id", userId);
+            }
           } else {
             const { data: newUser } = await supabaseAdmin
               .from("users")
@@ -73,6 +93,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
                 email,
                 name:
                   (profile?.name as string) || email.split("@")[0],
+                title: memberTitle,
               })
               .select("id")
               .single();

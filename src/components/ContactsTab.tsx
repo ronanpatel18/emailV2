@@ -71,15 +71,18 @@ export function ContactsTab({ users, selectedUserId, onChangeUserId }: ContactsT
       )
     : display;
 
+  // Stats reflect the currently selected view (Master = all contacts,
+  // or a specific assignee's contacts). Search input does not affect
+  // stats — it only narrows the table below.
   const stats = useMemo(() => {
-    const sent = contacts.filter((c) => c.last_sent_at).length;
-    const unsent = contacts.length - sent;
-    const thisWeek = contacts.filter((c) => {
+    const sent = display.filter((c) => c.last_sent_at).length;
+    const unsent = display.length - sent;
+    const thisWeek = display.filter((c) => {
       if (!c.last_sent_at) return false;
       return (Date.now() - new Date(c.last_sent_at).getTime()) / 86400000 < 7;
     }).length;
-    return { total: contacts.length, sent, unsent, thisWeek };
-  }, [contacts]);
+    return { total: display.length, sent, unsent, thisWeek };
+  }, [display]);
 
   const resetForm = () => {
     setForm({ name: "", email: "", company: "", assigned_to: "" });
@@ -174,7 +177,16 @@ export function ContactsTab({ users, selectedUserId, onChangeUserId }: ContactsT
       <div
         style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 28 }}
       >
-        <MetricTile label="Total contacts" value={stats.total} trend="Directory" sparkSeed={1} />
+        <MetricTile
+          label="Total contacts"
+          value={stats.total}
+          trend={
+            selectedUserId && hasPersonal
+              ? users.find((u) => u.id === selectedUserId)?.name || "Assigned"
+              : "Master"
+          }
+          sparkSeed={1}
+        />
         <MetricTile
           label="Emailed"
           value={stats.sent}
@@ -239,6 +251,7 @@ export function ContactsTab({ users, selectedUserId, onChangeUserId }: ContactsT
           <div style={{ padding: "0 14px" }}>Email</div>
           <div style={{ padding: "0 14px" }}>Company</div>
           <div style={{ padding: "0 14px" }}>Assigned</div>
+          <div style={{ padding: "0 14px" }}>Title</div>
           <div style={{ padding: "0 14px" }}>Last sent</div>
           <div style={{ padding: "0 14px", textAlign: "right" }}>Actions</div>
         </div>
@@ -268,6 +281,9 @@ export function ContactsTab({ users, selectedUserId, onChangeUserId }: ContactsT
               </div>
               <div style={{ padding: "12px 14px", fontSize: 12.5, color: "var(--ink-2)" }}>
                 {c.assigned_to_name || <span style={{ color: "var(--ink-4)" }}>Unassigned</span>}
+              </div>
+              <div style={{ padding: "12px 14px", fontSize: 12.5, color: "var(--ink-2)" }}>
+                {c.assigned_to_title || <span style={{ color: "var(--ink-4)" }}>—</span>}
               </div>
               <div style={{ padding: "12px 14px", fontSize: 12.5 }}>
                 {c.last_sent_at ? (

@@ -144,7 +144,7 @@ a { color: inherit; }
 
 .rowgrid {
   display: grid;
-  grid-template-columns: minmax(200px, 1.4fr) minmax(200px, 1.6fr) minmax(140px, 1fr) minmax(120px, 0.9fr) minmax(110px, 0.9fr) 80px;
+  grid-template-columns: minmax(180px, 1.3fr) minmax(180px, 1.4fr) minmax(120px, 0.9fr) minmax(110px, 0.8fr) minmax(120px, 0.9fr) minmax(110px, 0.9fr) 80px;
   align-items: center;
   gap: 0;
 }
