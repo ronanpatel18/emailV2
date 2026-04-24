@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo } from "react";
+import React, { useMemo } from "react";
 
 export const cx = (...a: (string | false | null | undefined)[]) =>
   a.filter(Boolean).join(" ");
@@ -26,24 +26,11 @@ export function fmtAgo(iso?: string | null) {
 export const fmtKB = (b: number) =>
   b < 1024 * 1024 ? `${Math.round(b / 1024)} KB` : `${(b / 1048576).toFixed(1)} MB`;
 
-/** Reveal-on-scroll for `.reveal` elements. Re-scans on every render so
- *  newly mounted sections (tab switches, async data) always get observed. */
+/** No-op. Previously mounted an IntersectionObserver per render which
+ *  caused perceived "random refreshing" on re-renders. Kept as a stable
+ *  export for any remaining callers. */
 export function useReveal(_dep?: unknown) {
-  useEffect(() => {
-    const io = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((e) => {
-          if (e.isIntersecting) {
-            e.target.classList.add("in");
-            io.unobserve(e.target);
-          }
-        });
-      },
-      { threshold: 0.08, rootMargin: "0px 0px -60px 0px" }
-    );
-    document.querySelectorAll(".reveal:not(.in)").forEach((n) => io.observe(n));
-    return () => io.disconnect();
-  });
+  // intentionally empty
 }
 
 export function Labeled({ label, children }: { label: string; children: React.ReactNode }) {

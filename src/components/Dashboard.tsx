@@ -5,7 +5,7 @@ import { signOut, useSession } from "next-auth/react";
 import { ContactsTab } from "./ContactsTab";
 import { TemplatesTab } from "./TemplatesTab";
 import { SendEmailsTab } from "./SendEmailsTab";
-import { initials, useReveal } from "./wsbc-ui";
+import { initials } from "./wsbc-ui";
 import type { User } from "@/types";
 
 type TabId = "contacts" | "templates" | "send";
@@ -25,8 +25,6 @@ export function Dashboard() {
   const [selectedUserId, setSelectedUserId] = useState<string>("");
   const hasFetched = useRef(false);
   const hasSetDefault = useRef(false);
-
-  useReveal(tab);
 
   const fetchUsers = useCallback(async () => {
     try {
@@ -81,18 +79,18 @@ export function Dashboard() {
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-            <div
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/wsbc-logo.png"
+              alt="WSBC"
               style={{
-                width: 28, height: 28,
-                background: "var(--ink)", color: "var(--paper)",
+                width: 32,
+                height: 32,
                 borderRadius: 6,
-                display: "grid", placeItems: "center",
-                fontFamily: "var(--font-display)",
-                fontSize: 17, fontStyle: "italic",
+                objectFit: "cover",
+                display: "block",
               }}
-            >
-              W
-            </div>
+            />
             <div style={{ lineHeight: 1 }}>
               <div style={{ fontSize: 13, fontWeight: 500, letterSpacing: "-0.01em" }}>
                 WSBC <span style={{ color: "var(--ink-3)" }}>·</span> Email Manager
