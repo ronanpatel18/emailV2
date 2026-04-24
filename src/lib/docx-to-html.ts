@@ -4,6 +4,11 @@ import { XMLParser } from "fast-xml-parser";
 const parser = new XMLParser({
   ignoreAttributes: false,
   attributeNamePrefix: "@_",
+  // Preserve whitespace inside text nodes. Word encodes inter-word
+  // spaces between styled runs as a standalone <w:t xml:space="preserve"> </w:t>.
+  // Default trimming would collapse that single-space run to "", causing
+  // adjacent words to concatenate (e.g. "boldword" + "regularword").
+  trimValues: false,
   isArray: (_name: string) => {
     const arrayElements = [
       "w:p",
